@@ -1,13 +1,13 @@
 # Contributor License Agreement
 
 Panorama is sponsored and maintained by **DNX Technology Pty Ltd**, trading as DNX
-Solutions ("DNX"). Before your first contribution is merged, you are asked to sign this
-Contributor License Agreement. Signing is automated: open a pull request, and the CLA
-bot will comment with a link and record your signature against your GitHub account. You
-sign once, not per pull request.
+Solutions ("DNX"). **By submitting a Contribution - opening a pull request, or
+pushing a commit to one - you accept this Contributor License Agreement** for that
+Contribution and every later one. There is nothing separate to sign: the pull request
+template asks you to confirm it, and the pull request records that you did.
 
 If you are contributing on behalf of your employer, make sure you have the authority to
-do so before you sign.
+do so before you submit.
 
 ## Why a CLA
 
@@ -18,12 +18,12 @@ copyright in everything you write.
 
 ## Terms
 
-By signing, you agree to the following in respect of every Contribution you submit to
+By submitting a Contribution, you agree to the following in respect of every Contribution you submit to
 this project.
 
 ### 1. Definitions
 
-**"You"** means the individual or legal entity signing this agreement.
+**"You"** means the individual or legal entity accepting this agreement by submitting a Contribution.
 
 **"Contribution"** means any original work of authorship — including any modification of
 or addition to an existing work — that You intentionally submit to DNX for inclusion in

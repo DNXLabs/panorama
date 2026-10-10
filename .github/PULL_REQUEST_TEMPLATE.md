@@ -13,4 +13,4 @@ say that you searched and none needed it. -->
 - [ ] `make check` passes locally.
 - [ ] Tests come with the change.
 - [ ] New files carry the SPDX header (`make license-check`).
-- [ ] I have signed the [CLA](../CLA.md) (the bot asks on your first pull request).
+- [ ] I have read the [Contributor License Agreement](../CLA.md) and accept it for this contribution.

@@ -9,8 +9,11 @@ decisions where the obvious alternative is wrong for a non-obvious reason.
 
 ## Before your first pull request
 
-Sign the [Contributor License Agreement](CLA.md). The CLA bot comments on your first
-pull request with a link; you sign once, not per PR.
+Read the [Contributor License Agreement](CLA.md). **Submitting a pull request means
+you accept it**, for that contribution and every later one; there is nothing to sign.
+It lets DNX distribute your contribution under the AGPL and under a commercial
+licence, and you keep the copyright. If you are contributing for your employer, make
+sure you are allowed to before you open the pull request.
 
 ## Development setup
 
