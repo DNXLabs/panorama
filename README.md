@@ -526,4 +526,4 @@ SAML is *not* an enterprise feature. For providers like Identity Center it is th
 only way to sign in at all, so gating it would gate SSO. Not implemented yet; when it
 lands, it lands here.
 
-Contributions require a signed CLA; see [`CLA.md`](CLA.md).
+Contributing means accepting the Contributor License Agreement; see [`CLA.md`](CLA.md).
