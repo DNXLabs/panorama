@@ -80,7 +80,10 @@ env:
 
 jobs:
   build:
-    name: Build
+    # Not plain "Build": that is CI's job, a required check on main, and a
+    # required check is matched by name - two jobs sharing one would let
+    # either satisfy it.
+    name: Build the docs
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.plan.outputs.version }}
