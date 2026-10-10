@@ -1,0 +1,6 @@
+Files under this identifier are copies of publicly available Amazon Web Services
+documentation pages, kept unmodified as test fixtures for the price finder
+(internal/pricefinder/testdata). They are copyright Amazon.com, Inc. or its
+affiliates, are included only to test parsing of the published pages, and are
+not licensed under this repository's licence. See the AWS Site Terms:
+https://aws.amazon.com/terms/

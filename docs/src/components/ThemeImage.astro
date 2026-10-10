@@ -1,0 +1,54 @@
+---
+// SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+// SPDX-License-Identifier: AGPL-3.0-only
+
+/**
+ * One diagram, in whichever theme the reader is in.
+ *
+ * WHY TWO FILES. The diagrams are rendered by docs/diagrams with a transparent
+ * ground, so the page shows through and a diagram never sits in a box of the
+ * wrong grey. The cost is that the ink has to be chosen at render time: light
+ * text for the dark theme, dark for paper. One file cannot be both, and an
+ * SVG that followed `prefers-color-scheme` would follow the operating system
+ * and not the switch in this site's header, which is the one the reader used.
+ *
+ * So both are emitted and Starlight's own utility classes hide the wrong one.
+ * `display: none` also takes it out of the accessibility tree, which is why
+ * the same alt text on both is said once and not twice.
+ *
+ * `narrow` is for a diagram drawn taller than it is wide: at the full column it
+ * would be two screens high and its labels larger than the body text.
+ *
+ * `frame` is for a screenshot of the console. A diagram has a transparent
+ * ground and wants no edge. A screenshot is an opaque rectangle the colour of
+ * the page it sits on - the console and this site share a token set - so
+ * without a hairline it has no edge at all, and a reader cannot tell where the
+ * manual stops and the picture of the product starts. The console is captured
+ * in both themes for the same reason the diagrams are drawn in both: a dark
+ * screen on a paper page is a hole in it.
+ *
+ * A class and not a `style` attribute, because the docs Content-Security-Policy
+ * is a hash list with no 'unsafe-inline': an inline style is dropped by the
+ * browser without a word, and the page would render at the wrong size for
+ * everybody while looking fine in `astro dev`, which sends no policy.
+ */
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+interface Props {
+  dark: ImageMetadata;
+  light: ImageMetadata;
+  alt: string;
+  caption?: string;
+  narrow?: boolean;
+  frame?: boolean;
+}
+
+const { dark, light, alt, caption, narrow = false, frame = false } = Astro.props;
+---
+
+<figure class:list={['diagram', { narrow, frame }]}>
+  <Image src={dark} alt={alt} class="light:sl-hidden" />
+  <Image src={light} alt={alt} class="dark:sl-hidden" />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>

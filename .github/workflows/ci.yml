@@ -1,0 +1,165 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Go's version is not here: every setup-go step reads it from go.mod, whose
+  # go directive is the floor that carries the standard library's security
+  # fixes. A "1.26" here resolves to whatever patch the runner has cached,
+  # which can be older than that floor.
+  NODE_VERSION: "24"
+  LINT_VERSION: "v2.14.0"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ui/app/package-lock.json
+
+      - name: Build the console
+        run: make ui HOST=1
+
+      # CI uses the host toolchain rather than the Makefile's containers: the
+      # runner is already isolated, and nesting Docker only costs time. HOST=1
+      # is the same code path contributors use when they have Go installed, so
+      # it stays exercised.
+      - name: go.mod is tidy
+        run: make tidy-check HOST=1
+
+      - name: Every file carries its licence
+        run: make license-check
+
+      # What release.yml runs to pin the template a release ships. Run here
+      # with a placeholder version, so that a change to the ImageTag parameter
+      # fails the pull request that made it rather than the next release.
+      - name: The release template renders
+        run: deploy/cloudformation/release-template.sh v0.0.0-ci > /dev/null
+
+      # Known vulnerabilities in the modules this binary actually calls into,
+      # not merely depends on, so a finding is one worth acting on.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ env.LINT_VERSION }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    # The Postgres half of the store tests only runs when a DSN is present.
+    # Providing one here is what keeps the two migration sets honest: without
+    # it, the Postgres schema would never actually be executed.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: panorama
+          POSTGRES_PASSWORD: panorama
+          POSTGRES_DB: panorama_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U panorama -d panorama_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ui/app/package-lock.json
+
+      - name: Build the console
+        run: make ui HOST=1
+
+      - name: Test
+        env:
+          PANORAMA_TEST_POSTGRES_DSN: postgres://panorama:panorama@localhost:5432/panorama_test?sslmode=disable
+        run: make test HOST=1
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `git describe` needs the tags to produce a real version string.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ui/app/package-lock.json
+
+      - name: Build the console
+        run: make ui HOST=1
+
+      - name: Build the binary
+        run: make build HOST=1
+
+      - name: Smoke test the binary
+        run: ./bin/panorama version
+
+      # The default buildx driver is `docker`, which cannot export a build
+      # cache. `cache-to: type=gha` below therefore fails the build outright
+      # unless a container-driver builder exists first.
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the container image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: panorama:ci
+          # No found price table: this image proves the build and is never
+          # run by anybody, and fetching a release's table would make every
+          # pull request depend on a published release.
+          build-args: |
+            VERSION=${{ github.sha }}
+            COMMIT=${{ github.sha }}
+            FOUND_PRICES=none
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the image
+        run: docker run --rm panorama:ci version

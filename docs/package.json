@@ -1,0 +1,25 @@
+{
+  "name": "panorama-docs",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "description": "Panorama's documentation site. Built into ./dist, served at panorama.dnx.ai/docs.",
+  "scripts": {
+    "generate": "node scripts/generate-reference.mjs",
+    "predev": "npm run generate",
+    "dev": "astro dev",
+    "prebuild": "npm run generate",
+    "build": "astro build",
+    "postbuild": "node scripts/csp-hashes.mjs --check",
+    "preview": "astro preview",
+    "precheck": "npm run generate",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "^7.3.8",
+    "sharp": "^0.35.5",
+    "starlight-links-validator": "^0.27.0"
+  }
+}

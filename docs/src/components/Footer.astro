@@ -1,0 +1,22 @@
+---
+// SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+// SPDX-License-Identifier: AGPL-3.0-only
+
+/**
+ * Starlight's footer, followed by the manual's licence.
+ *
+ * The manual is CC BY 4.0 and the code AGPL-3.0-only, and the page is where
+ * somebody quoting it is, so the licence is stated on every page rather than
+ * only in the repository. Code samples on the page stay under the code's
+ * licence, which is why the line names both.
+ */
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default><slot /></Default>
+<p class="licence-note">
+  This manual is licensed under
+  <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Code samples in
+  it are part of Panorama, licensed under the
+  <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU AGPL v3.0 only</a>.
+</p>

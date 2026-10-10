@@ -1,0 +1,478 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Panorama configuration.
+#
+# Copy to config.yaml and edit, or set the equivalent environment variables -
+# every key below has one, and the environment wins. Panorama validates this
+# file at startup and refuses to run if anything is wrong, so a typo shows up
+# immediately rather than as a policy that quietly never applies. Unknown keys
+# are an error.
+#
+# THIS FILE HOLDS WHAT A DEPLOYMENT CANNOT START WITHOUT: how to reach your
+# identity provider and the key that protects everything else - plus a region
+# to seed the first model provider with. Anything an administrator switches on
+# afterwards - model providers and their regions, which models engineers may
+# use, teams, budgets, the GitHub connection - lives in the database behind a
+# screen, because those are decisions made months
+# later by somebody who may have no access to this file at all.
+#
+# Secrets do not belong in this file. Prefer the environment or a mounted
+# secret file for anything sensitive.
+
+
+# Protects the credentials administrators store from the console - today the
+# GitHub connection.
+#
+# Any passphrase of 16 characters or more works: the key is derived from it.
+# `panorama admin generate-key` mints a full 32-byte one instead, which is used
+# exactly as given rather than derived from.
+#
+# Changing this value is not a rotation. Whatever is already stored was sealed
+# with the old key and cannot be read with the new one; each credential has to
+# be entered again in the console.
+#
+# It stays here while what it protects lives in the database, and that split is
+# the whole point: a dump, a replica or a nightly backup carries no working
+# credential, because the key was never in any of them.
+#
+# Optional. Without one the deployment runs normally and simply cannot store a
+# credential; the console says so at the moment somebody tries.
+#
+# Keep it. Lose it and the stored credentials cannot be read back, and each has
+# to be entered again in the console.
+# PANORAMA_ENCRYPTION_KEY
+encryption_key: ""
+
+server:
+  # Listen address, as host:port. PANORAMA_SERVER_ADDR
+  addr: ":8088"
+
+  # The externally reachable origin of this deployment. Clients are pointed
+  # here and OIDC redirects are built from it, so it must match what engineers
+  # actually dial - not localhost, once you are past the laptop.
+  # PANORAMA_SERVER_BASE_URL
+  base_url: "http://localhost:8088"
+
+  # How long a client may take to send its request headers. This bounds headers
+  # only: request bodies and responses are deliberately unbounded, because
+  # streaming responses are long-lived by design.
+  # PANORAMA_SERVER_READ_HEADER_TIMEOUT
+  read_header_timeout: 15s
+
+  # How long a graceful shutdown waits for in-flight requests, including active
+  # streams, before the process exits anyway.
+  # PANORAMA_SERVER_SHUTDOWN_TIMEOUT
+  shutdown_timeout: 30s
+
+  # Ceiling on a proxied request body. Coding-agent requests carry whole
+  # conversations, so this is high - but unbounded is not a ceiling.
+  # PANORAMA_SERVER_MAX_REQUEST_BYTES
+  max_request_bytes: 33554432 # 32 MiB
+
+database:
+  # "sqlite" or "postgres". SQLite is the zero-dependency default and runs the
+  # whole product, background jobs included - the workers are intervals in this
+  # process, not a queue. Postgres is what you move to for more than one
+  # replica, since SQLite is held to a single writer.
+  # PANORAMA_DATABASE_DRIVER
+  driver: sqlite
+
+  # Driver-specific data source name. PANORAMA_DATABASE_DSN
+  #
+  #   sqlite:   file:panorama.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(on)
+  #   postgres: postgres://panorama:password@localhost:5432/panorama?sslmode=require
+  #
+  # Put the Postgres password in PANORAMA_DATABASE_DSN rather than here.
+  #
+  # A SQLite database must live on a local filesystem - a real volume, not a
+  # bind mount from a host, an NFS share, or anything else that emulates POSIX
+  # locking. SQLite needs locking and shared-memory semantics those layers do
+  # not reliably provide, and both failures are silent.
+  #
+  # Both have been observed on Docker Desktop for macOS, with the database on a
+  # bind-mounted host directory:
+  #
+  #   - `panorama policy apply` reported success, the row was on disk, and the
+  #     running gateway went on serving the policy it had loaded at startup.
+  #   - Committed request rows were lost across a restart, having been visible
+  #     through the API moments before.
+  #
+  # The same configuration on a container-local filesystem behaved correctly.
+  # Put the file on a real volume, and use Postgres for anything that runs more
+  # than one process.
+  dsn: "file:panorama.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(on)"
+
+  # The discrete form, which is the alternative to `dsn` and not an addition to
+  # it: setting `host` assembles the Postgres DSN from the fields below, and
+  # setting both `host` and `dsn` is refused rather than resolved by precedence.
+  #
+  # It exists because of how a secret reaches a container. ECS injects one JSON
+  # key of a Secrets Manager secret into one environment variable and cannot
+  # concatenate, while RDS - and every managed rotation AWS offers - writes
+  # username, password, host, port and dbname as separate keys. So the choice
+  # is between assembling the DSN here and resolving the password into a task
+  # definition where anyone with ecs:DescribeTaskDefinition can read it.
+  #
+  # Kubernetes and Docker secret mounts want `password_file` instead; ECS wants
+  # neither, since it sets the environment variable directly.
+  #
+  # host: panorama.abc123.us-east-1.rds.amazonaws.com   PANORAMA_DATABASE_HOST
+  # port: 5432                                          PANORAMA_DATABASE_PORT
+  # name: panorama                                      PANORAMA_DATABASE_NAME
+  # user: panorama                                      PANORAMA_DATABASE_USER
+  # password: ""                                        PANORAMA_DATABASE_PASSWORD
+  # password_file: /run/secrets/db-password             PANORAMA_DATABASE_PASSWORD_FILE
+  #
+  # sslmode defaults to "require", which encrypts the connection without
+  # verifying the server certificate - the ordinary posture for a task and an
+  # RDS instance inside one VPC. "verify-full" is stronger and needs the Amazon
+  # RDS CA bundle present in the image, which the distroless base does not
+  # carry, so turning it on means mounting the bundle as well.
+  # PANORAMA_DATABASE_SSLMODE
+  # sslmode: require
+
+  # Connection pool ceiling. Ignored for SQLite, which is held to one writer.
+  # PANORAMA_DATABASE_MAX_OPEN_CONNS
+  max_open_conns: 25
+
+  # Run pending migrations at startup. Convenient for a single container; set
+  # this to false when running multiple replicas and migrate as its own step.
+  # PANORAMA_DATABASE_AUTO_MIGRATE
+  auto_migrate: true
+
+log:
+  # debug, info, warn, error. PANORAMA_LOG_LEVEL
+  level: info
+
+  # "json" for production, "text" when you are reading it yourself.
+  # PANORAMA_LOG_FORMAT
+  format: json
+
+# Model providers.
+#
+# Configured in the console - Settings, Model providers - or with
+# `panorama providers`, and stored in the database: a region and a switch per
+# provider. Two ship: bedrock (bedrock-runtime, Claude through inference
+# profiles) and bedrock-mantle (every model in the region you choose, including
+# open-weight models over the OpenAI APIs). Each has its own region, which may
+# differ from the other's.
+#
+# Credentials are not configured anywhere. The AWS SDK default credential chain
+# applies, so an EC2 instance role, an ECS task role, IRSA, or the ambient
+# environment supplies them, and Panorama never asks you to paste an access
+# key. The role's policy grants both providers in every region, so choosing a
+# region is never an IAM change: `panorama providers policy` prints it, the
+# console serves it, and the CloudFormation template attaches it.
+providers:
+  # How often each provider is asked what this account and its region can
+  # invoke. PANORAMA_PROVIDERS_DISCOVERY_INTERVAL
+  #
+  # That answer is what the console's catalogue is built from: which models
+  # exist, whether each needs an inference profile, whether it streams, which
+  # API it speaks, and - the part nothing else can tell you - which AWS regions
+  # each inference profile may process a request in. Hours rather than minutes,
+  # because it changes when AWS ships a model or somebody edits an IAM policy.
+  # Negative disables the interval; saving a provider and the console's
+  # "Refresh catalogue" button still ask on demand.
+  discovery_interval: 6h
+
+bedrock:
+  # SEEDS the bedrock provider on a deployment's first start, e.g.
+  # ap-southeast-2. PANORAMA_BEDROCK_REGION
+  #
+  # Read once: when the providers table has no bedrock row, one is created from
+  # this region. From then on the region is changed in the console, and this
+  # value is not read again - a startup whose value disagrees with the stored
+  # one logs a warning naming both, and changes nothing. It exists so compose
+  # and CloudFormation arrive with a provider already configured.
+  region: ""
+
+  # Beta feature flags dropped before a request reaches Bedrock, seeded onto
+  # the provider with the region. PANORAMA_BEDROCK_UNSUPPORTED_BETAS
+  #
+  # Bedrock fails a whole request when it sees a beta flag it does not know, and
+  # current coding agents send several that it does not. Unset uses the
+  # provider's built-in list; an empty list forwards everything. Afterwards this
+  # is corrected in the console, under the provider's model tables.
+  # unsupported_betas: []
+
+  # Context-window overrides, seeded onto the provider with the region.
+  # PANORAMA_BEDROCK_CONTEXT_WINDOWS ("family=tokens,family=tokens")
+  #
+  # Bedrock publishes no context length, so Panorama ships a table of its
+  # own, and a table goes stale the day AWS ships a model. Keys are model
+  # families - a geography prefix and a revision date are stripped before
+  # lookup - or exact ids. 0 makes a model unrecorded. Afterwards this is
+  # corrected in the console.
+  #
+  # context_windows:
+  #   anthropic.claude-sonnet-5: 1000000
+
+pricing:
+  # How often to re-fetch published rates from the AWS Price List API.
+  # Zero disables the fetch and leaves the price table as it stands - the rates
+  # compiled into the binary, plus anything set below.
+  # PANORAMA_PRICING_REFRESH_INTERVAL
+  #
+  # The fetch needs two IAM permissions:
+  #
+  #   pricing:GetProducts
+  #   bedrock:ListFoundationModels
+  #
+  # The second is not incidental. AWS publishes prices against a display name
+  # ("Claude Sonnet 5") while the gateway invokes a model id
+  # ("anthropic.claude-sonnet-5"), and Bedrock's own model list is the only
+  # thing that joins the two. Without it, nothing can be priced.
+  #
+  # A failed refresh is not fatal: Panorama keeps costing requests at the rates
+  # it already has and logs the failure each time it happens.
+  refresh_interval: 24h
+
+  # Rates for models Panorama does not already price, in US dollars per million
+  # tokens. Two real cases: an enterprise agreement whose prices are not the
+  # public ones, and a model too new to be in the shipped table or the
+  # catalogue. PANORAMA_PRICING_MODELS
+  #
+  # The key is the model a route points at, as provider/model - the
+  # inference-profile id exactly as Bedrock publishes it, prefix included. A key
+  # with no provider is read as bedrock's, with a warning. The
+  # profile prefix is part of the key because AWS publishes two rate sets per
+  # model and the global one is 10%
+  # cheaper - `us.` and `global.` are different prices for the same model, so
+  # they are overridden separately.
+  #
+  # A configured rate replaces the published one outright, so state all of
+  # them. input and output are required; the cache rates may be omitted only
+  # for a model that cannot cache. A request that uses a class with no rate is
+  # recorded unpriced rather than costed at zero.
+  #
+  # Some models cost more above a prompt size: OpenAI's GPT-5.x on Bedrock
+  # charges a second set of rates for a request of more than 272K input
+  # tokens, cached ones included, and that set applies to the whole request.
+  # State it under tiers, or long requests are costed at the short-context
+  # rate. A tier needs input and output, like the base rates.
+  #
+  # The environment form packs the rates in the documented order, and a tier
+  # follows after an @ with the prompt size it applies above:
+  #
+  #   PANORAMA_PRICING_MODELS="bedrock/us.anthropic.claude-sonnet-5=2.20/11.00/0.22/2.75/4.40"
+  #   PANORAMA_PRICING_MODELS="bedrock-mantle/openai.gpt-5.6-luna=0.22/1.32/0.022/0.275/@272000=0.44/1.98/0.044/0.55/"
+  models: {}
+  # models:
+  #   bedrock/us.anthropic.claude-sonnet-5:
+  #     input: 2.20
+  #     output: 11.00
+  #     cache_read: 0.22
+  #     cache_write: 2.75      # five-minute TTL, the default
+  #     cache_write_1h: 4.40   # one-hour TTL, separately priced
+  #   bedrock-mantle/openai.gpt-5.6-luna:
+  #     input: 0.22
+  #     output: 1.32
+  #     cache_read: 0.022
+  #     cache_write: 0.275
+  #     tiers:
+  #       - above_input_tokens: 272000
+  #         input: 0.44
+  #         output: 1.98
+  #         cache_read: 0.044
+  #         cache_write: 0.55
+
+# Routes and budgets.
+#
+# Neither is configured here. They live in the database, because the console
+# edits them and because a budget has to be enforced against spend only the
+# database knows. Write them in a policy file and apply it, or edit them on the
+# console's Routing screen:
+#
+#     panorama policy check -f policy.yaml     # validate
+#     panorama policy apply -f policy.yaml     # apply, idempotently
+#     panorama policy show                     # what is in force, and spend
+#
+# See policy.example.yaml for the file format.
+policy:
+  # How often routes, budgets, and spend are re-read from the database.
+  #
+  # This is not how fast a budget reacts to what this instance is serving -
+  # every instance counts its own traffic between reloads. It is how fast one
+  # instance learns what other instances have served, so a single-replica
+  # deployment is unaffected by the value.
+  # PANORAMA_POLICY_RELOAD_INTERVAL
+  reload_interval: 30s
+
+# The credentials a developer's tools hold.
+#
+# Two lifetimes, doing different jobs. A grant is what `panorama login` leaves
+# on a laptop and is measured in weeks, because signing in is something a person
+# does. A token is what the grant exchanges for and is measured in hours,
+# because it is what actually buys model calls - so its length is also how long
+# a revoked laptop keeps working.
+#
+# Shortening token_ttl tightens revocation and costs nothing but more exchanges.
+# There is no reason to make it long.
+auth:
+  # How long a signed-in CLI stays signed in. Zero means it never expires on its
+  # own and is ended only by revoking it from the console.
+  # PANORAMA_AUTH_GRANT_TTL
+  grant_ttl: 720h # 30 days
+
+  # The lifetime of each gateway token minted from a grant, and the upper bound
+  # on how long a revoked grant keeps working.
+  #
+  # Claude Code re-runs its apiKeyHelper on its own schedule, set with
+  # CLAUDE_CODE_API_KEY_HELPER_TTL_MS. The console generates that value below
+  # this one, so a token is replaced before it expires rather than after.
+  # PANORAMA_AUTH_TOKEN_TTL
+  token_ttl: 1h
+
+  # How long a device-authorization code waits for somebody to approve it.
+  # PANORAMA_AUTH_DEVICE_CODE_TTL
+  device_code_ttl: 10m
+
+  # The cadence a waiting CLI is told to poll at. Polling faster than this is
+  # answered with slow_down rather than with a grant.
+  # PANORAMA_AUTH_DEVICE_POLL_INTERVAL
+  device_poll_interval: 5s
+
+  # A ceiling on the lifetime of a console-minted token, which is thirty days
+  # and cannot be asked to be longer. The ceiling binds downward only: a week
+  # here makes a minted token last a week, and anything above thirty days
+  # changes nothing. Zero means no ceiling beyond the thirty days.
+  #
+  # A pasted token does not rotate and lives in a dotfile, so it is the
+  # credential this deployment can least protect; shorten it here if thirty
+  # days is too long for your organization.
+  # PANORAMA_AUTH_MAX_TOKEN_TTL
+  max_token_ttl: 0s
+
+# Tying spend to the work it paid for.
+#
+# There is very little here on purpose. Attribution works with no client
+# configuration and almost no server configuration: the extraction rules are
+# properties of the coding tools, not of your organization.
+attribution:
+  # On unless you turn it off. A gateway that does not attribute is missing the
+  # reason it was deployed. PANORAMA_ATTRIBUTION_ENABLED
+  enabled: true
+
+  # What a ticket key looks like. Empty uses a default that matches the shape
+  # most trackers use and guards itself against the identifiers shaped like
+  # ticket keys that are not - UTF-8, SHA-1, CVE-2024.
+  #
+  # Naming your projects turns the lowest rung of the provenance ladder from a
+  # heuristic into an allowlist, and is the recommended setting for anyone who
+  # cares about precision:
+  #
+  #   ticket_pattern: '\b(PAY|BILL|OPS)-\d+\b'
+  #
+  # PANORAMA_ATTRIBUTION_TICKET_PATTERN
+  ticket_pattern: ""
+
+  # How many live conversations are remembered in memory, so that a session is
+  # attributed once rather than once per turn. Zero uses the default of 10,000,
+  # which costs a few megabytes and is far more than one organization has open
+  # at a time. PANORAMA_ATTRIBUTION_SESSION_CACHE_SIZE
+  session_cache_size: 0
+
+# The systems of record that confirm inferred work and supply outcomes.
+#
+# There is no connection here, and that is the point: GitHub is connected from
+# the console, by an administrator, and what they enter is stored in the
+# database. Connecting an integration is an operational decision made months
+# after a deployment is stood up, often by somebody without access to this file,
+# and a release cycle does not belong in front of it.
+#
+# The credential is encrypted with `encryption_key` below before it is stored,
+# so a database dump carries nothing usable.
+#
+# What remains here is timing, which has sensible defaults nobody needs to edit.
+#
+# Nothing here is required, and a deployment with this block empty attributes
+# spend exactly as well as one with GitHub and Jira connected. What it does not
+# have is titles, merge status, and cost per merged pull request - and every
+# screen that would show those says so, rather than showing a zero.
+#
+# Panorama asks these systems only about work items it has already seen in
+# traffic. It never enumerates a repository or a Jira project, so the read scope
+# it needs covers only what your engineers actually touched and the number of
+# API calls is bounded by conversations rather than by the size of your
+# organization.
+integrations:
+  # How often the connected systems are asked. Zero uses the default of 15m.
+  # PANORAMA_INTEGRATIONS_SYNC_INTERVAL
+  sync_interval: 15m
+
+  # How long a confirmed answer is trusted before it is asked again. Zero uses
+  # the default of 6h. A pull request's status changes a handful of times in its
+  # life; re-asking every sync would spend an API budget to re-learn "still
+  # merged". PANORAMA_INTEGRATIONS_STALE_AFTER
+  stale_after: 6h
+
+web_search:
+  # A search gateway this deployment created for itself: the
+  # WebSearchGatewayUrl output of the CloudFormation stack.
+  # PANORAMA_WEB_SEARCH_GATEWAY_URL
+  #
+  # Set, web search is on from the first start, and Settings, Web search shows
+  # the gateway and the price without offering to change them; an administrator
+  # can still switch search off there. Empty, the gateway is pasted into that
+  # screen instead.
+  gateway_url: ""
+
+# Single sign-on. Leave the issuer empty to disable. Once it is set, the rest of
+# the block is required - a half-configured identity provider looks like SSO is
+# on when nobody can actually sign in.
+#
+# Validate an issuer before you restart anything - the error otherwise surfaces
+# at your identity provider, in its words, a long way from the setting that
+# caused it:
+#
+#     panorama sso presets
+#     panorama sso probe -preset okta -issuer https://your-org.okta.com
+#
+# That prints this block filled in, and the redirect URI to register. Afterwards
+# `panorama sso doctor` checks what discovery cannot prove, and `panorama sso
+# claims` shows the group names your provider actually sent - run that before
+# mapping any groups, because a mapping naming a group nobody is in grants
+# nothing and fails silently.
+oidc:
+  # Issuer URL, used for discovery. Must be https.
+  #
+  # Microsoft Entra ID and Okta are the documented first-class providers, and
+  # any OIDC provider works. AWS IAM Identity Center is not one and cannot be:
+  # sign-in for customer managed applications is SAML 2.0 only, and it has no
+  # groups attribute to put in an assertion, so role mapping cannot work through
+  # it by any route. Point Panorama at the identity source behind it - Entra ID,
+  # Okta, your directory. `panorama sso presets` says this too.
+  # PANORAMA_OIDC_ISSUER
+  issuer: ""
+
+  # PANORAMA_OIDC_CLIENT_ID
+  client_id: ""
+
+  # Set this through PANORAMA_OIDC_CLIENT_SECRET, or point client_secret_file
+  # at a mounted secret. Do not write it here.
+  client_secret: ""
+
+  # Read the client secret from a file - how Kubernetes and ECS present mounted
+  # secrets. Mutually exclusive with client_secret.
+  # PANORAMA_OIDC_CLIENT_SECRET_FILE
+  client_secret_file: ""
+
+  # Scopes requested at authorisation; must include openid.
+  # PANORAMA_OIDC_SCOPES (comma-separated)
+  scopes: ["openid", "profile", "email", "groups"]
+
+  # The token claim carrying group membership. Groups map to Panorama roles:
+  # Admin, Manager, Developer. PANORAMA_OIDC_GROUPS_CLAIM
+  groups_claim: "groups"
+
+  # Limits sign-in to accounts in these domains, written bare: example.com.
+  # Empty allows every account the issuer signs in, which is right when the
+  # issuer names your own tenant. Required when the issuer is Google: that
+  # issuer signs in every Google account there is, and the first account to
+  # sign in owns the deployment, so Panorama refuses to start without it. At
+  # Google the domain is read from the token's hosted-domain claim and never
+  # from the address; elsewhere, from a verified email address.
+  # PANORAMA_OIDC_ALLOWED_DOMAINS (comma-separated)
+  allowed_domains: []

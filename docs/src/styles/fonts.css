@@ -1,0 +1,79 @@
+/* SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+   SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Questrial, Tomorrow, Lexend and JetBrains Mono - the console's four, served
+ * from this site's own origin.
+ *
+ * THESE ARE THE PRODUCT'S FAMILIES, NOT THE MARKETING PAGE'S. Not the landing
+ * page's set (Questrial, Lexend, Mulish), although the two share a domain,
+ * because a reader arrives at the docs from the console far more often than
+ * from the landing page, and what they are reading about is the console. So
+ * the faces, the weights and the ground are the console's, and
+ * `ui/design-tokens.css` is imported rather than copied - see tokens in
+ * docs.css.
+ *
+ * No Mulish. It is the system's face for long-form secondary copy, and every
+ * such line here is already `--font-ui`. A family nobody sets is a download
+ * nobody needs - which is the console's own reasoning, applied here.
+ *
+ * Only the latin subset is referenced, and the weights are declared exactly as
+ * the console declares them, because the declaration is what makes "one cut"
+ * a rule the browser enforces rather than a convention review has to catch.
+ */
+
+/* Questrial: `--font-mono`, and therefore the structural voice - every heading,
+   every sidebar group label, the wordmark.
+
+   ONE WEIGHT, AND NOTHING ASKS FOR ANOTHER, because Questrial ships exactly
+   one. A rule setting 600 on structural text gets a synthesised smear rather
+   than a cut, which at an 11px tracked label is a smudge. Declaring it at 400
+   alone is what enforces that.
+
+   It is the design system's substitute for Stolzl Book, the canonical DNX
+   face, and Stolzl is named nowhere - not even in the fallback stack. A stack
+   naming it renders one site for the few people with it installed locally and
+   another for everybody else. */
+@font-face {
+  font-family: 'Questrial';
+  src: url('../assets/fonts/questrial-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  /* swap, not block: the page is legible in the fallback stack, and a blank
+     page while a local font loads is a worse trade than one reflow. */
+  font-display: swap;
+}
+
+/* Tomorrow: `--font-figure`, the family the design system does not name.
+
+   Declared at 300 alone for its own reason: its heavier cuts close the
+   counters on the digits, and a 0 that reads as an 8 defeats the only thing a
+   figure is for. The choice runs one way and light opens them further. */
+@font-face {
+  font-family: 'Tomorrow';
+  src: url('../assets/fonts/tomorrow-latin-300-normal.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Lexend: `--font-ui`, and everything read as language. The only variable face
+   in the set, and so the only one with a weight to choose - it runs at 350,
+   which is set in the token file rather than here. */
+@font-face {
+  font-family: 'Lexend';
+  src: url('../assets/fonts/lexend-latin-wght-normal.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* JetBrains Mono: `--font-code`, and not a voice. It exists because none of the
+   other three is a monospace, and this site is mostly things a person will
+   paste into a terminal. It labels nothing. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}

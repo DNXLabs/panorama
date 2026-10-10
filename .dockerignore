@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+.git
+.github
+.design-docs
+.claude-design
+bin
+dist
+data
+ui/app/node_modules
+# ui/dist is built inside the image by the node stage, never copied in.
+ui/dist
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+config.yaml
+config.yml
+.env
+.env.*
+.gocache

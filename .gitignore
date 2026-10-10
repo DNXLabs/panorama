@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Build output
+/bin/
+/dist/
+
+# Local configuration and data - never commit either
+config.yaml
+config.yml
+*.local.yaml
+/data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# UI
+/ui/dist/
+
+# Tooling
+*.test
+*.out
+coverage.*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Container build caches
+/.gocache/
+# Not anchored: a container run started from a subdirectory leaves one there,
+# and a stray toolchain cache is never a thing to commit.
+.gocache/
+ui/dist/
+ui/app/node_modules/
+
+# Local compose overrides - machine-specific by definition.
+docker-compose.override.yml
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+ui/app/.design-sync-compiled.css
+ui/app/ds-types/
+ui/app/index.d.ts
+
+screenshots
+.design-sync
+# Agent tooling state - worktrees, caches, and scratch output.
+.claude/
+
+# Browser-automation scratch: screenshots and page dumps from driving the
+# console locally. Never part of the build.
+.playwright-mcp/
+
+# The documentation site. Its build output is not committed, for the same
+# reason the console's is not: a generated bundle in every diff that touches a
+# page. The reference pages under src/content/docs/reference/ are generated
+# from config.example.yaml and policy.example.yaml on every build, so there is
+# no committed copy of them to go stale.
+docs/node_modules/
+docs/dist/
+docs/.astro/
+docs/src/content/docs/reference/configuration.md
+docs/src/content/docs/reference/policy.md
+
+# Internal design documents: the build spec, product description, screens
+# envisioning document and the hi-fi console mock. Kept locally, not published.
+.design-docs/
+.claude-design/
+
+# The Impeccable design plugin's own inputs and state. The design context a code
+# change needs is in ui/CLAUDE.md; these stay local for the plugin.
+/PRODUCT.md
+/.impeccable.md
+/.impeccable/
+
+# Python bytecode, from rendering the docs diagrams
+__pycache__/

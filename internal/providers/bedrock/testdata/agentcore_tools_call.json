@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"id\": \"d3b2cf9d\", \"results\": [{\"publishedDate\": \"unknown\", \"text\": \"Learn and network with Go developers from around the world The Go project's official blog. Get help and stay informed from Go Go 1.25 Release Notes Introduction to Go 1.25 The latest Go release, version 1.25, arrives in August 2025 , six months after Go 1.24 . \\n\\nThe new go doc -http option will start a documentation server showing documentation for the requested object, and open the documentation \", \"title\": \"The Go Programming Language\", \"url\": \"https://go.dev/doc/go1.25\"}, {\"publishedDate\": \"04:00PM, Thursday, January 27 2000, PST\", \"text\": \"The Go project's official blog. DRAFT RELEASE NOTES \\u2014 Introduction to Go 1.28 Go 1.28 is not yet released. These are work-in-progress release notes. Go 1.28 is expected to be released in February 2027. \\n\\nso that iteration errors are correctly distinguished from a smaller result. Bootstrap As mentioned in the Go 1.26 release notes , Go 1.28 now requires Go 1.26.0 or later for bootstrap. We expect t\", \"title\": \"The Go Programming Language\", \"url\": \"https://tip.golang.org/doc/next\"}]}"
+      }
+    ]
+  }
+}

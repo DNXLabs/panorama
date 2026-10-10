@@ -1,0 +1,683 @@
+/* SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+   SPDX-License-Identifier: AGPL-3.0-only */
+
+/*
+ * Panorama docs - Starlight, wearing the console's design tokens.
+ *
+ * The token set is `ui/design-tokens.css`, imported by astro.config.mjs and
+ * not copied: the same file `ui/app` imports, so a colour the console changes
+ * is a colour these pages change with it. Everything it argues - the neutral
+ * grey ground, the measured ink ramps, the accent that is not the CTA, the
+ * four families - holds here without being re-argued.
+ *
+ * So this file is a mapping from those tokens onto the names Starlight reads,
+ * plus the handful of rules a manual needs that a console does not. Where a
+ * rule goes beyond mapping it says why.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO DIVERGENCES FROM THE CONSOLE, both about reading rather than operating.
+ *
+ * 1. THE BODY IS 16px, NOT THE CONSOLE'S 14px. The console's scale is drawn
+ *    for density: a five-column table with 410px of fixed columns and a 52px
+ *    figure above it. A manual is one column of prose read for minutes at a
+ *    time, which is the case the design system's own 16px/1.7 step was drawn
+ *    for - so the sizes here come from the system's scale rather than the
+ *    console's narrowing of it. The faces, the weights and the colours do not
+ *    move.
+ *
+ * 2. PROSE HOLDS A MEASURE AND CODE DOES NOT. 68ch for a paragraph and an
+ *    aside, the full width of the pane for a table or a code block, because
+ *    wrapping a YAML fragment mid-key is how somebody copies a broken one.
+ *    Both start at the same left edge, beside the sidebar, which is what
+ *    makes the difference in their right edges read as a rule rather than as
+ *    a misalignment. See "the column" below.
+ */
+
+/* ------------------------------------------------------ the dark ground -- */
+/* Dark is the console's unqualified `:root` and is the default here for the
+   same reason: these screens were drawn dark, and a manual for an operations
+   tool is read beside it. */
+:root {
+  --sl-color-accent-low: var(--tint-accent);
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: var(--accent-hover);
+
+  --sl-color-white: var(--text-primary);
+  --sl-color-gray-1: var(--text-secondary);
+  --sl-color-gray-2: var(--text-secondary);
+  --sl-color-gray-3: var(--text-tertiary);
+  --sl-color-gray-4: var(--text-muted);
+  --sl-color-gray-5: var(--rule-control);
+  --sl-color-gray-6: var(--rule);
+  --sl-color-gray-7: var(--surface-inset);
+  --sl-color-black: var(--surface-page);
+
+  --sl-color-bg: var(--surface-page);
+  --sl-color-bg-nav: var(--surface-chrome);
+  --sl-color-bg-sidebar: var(--surface-page);
+  --sl-color-bg-inline-code: var(--surface-control);
+  --sl-color-bg-accent: var(--accent);
+
+  --sl-color-text: var(--text-secondary);
+  --sl-color-text-accent: var(--accent);
+  --sl-color-text-invert: var(--on-accent);
+
+  --sl-color-hairline: var(--rule);
+  --sl-color-hairline-light: var(--rule-control);
+  --sl-color-hairline-shade: var(--rule-inner);
+
+  /* The banner is the one place a frozen version speaks, so it is the accent
+     tint the console uses for a selected band rather than a colour of its
+     own - and its text is the ink a selected band carries. Starlight's
+     default for banner text is `--sl-color-text-invert`, the ink for a SOLID
+     accent fill, which on a 14% tint is the page's own colour: dark on dark,
+     and on paper, light on light. */
+  --sl-color-banner-bg: var(--band-selected);
+  --sl-color-banner-text: var(--text-primary);
+
+  --sl-color-red: var(--state-danger);
+  --sl-color-orange: var(--state-warn);
+  --sl-color-blue: var(--accent);
+}
+
+/* THREE SIGNAL COLOURS, BECAUSE THE PALETTE HAS THREE.
+ *
+ * Starlight draws four kinds of aside from four hues - blue, purple, orange,
+ * red - and this palette holds the accent, Empower and danger. There is no
+ * green and no purple in it, and the token file's rule is that nothing invents
+ * a colour, so `tip` is drawn in the accent like `note` rather than in a
+ * lavender that belongs to no part of this product. The icon and the title are
+ * what tell them apart.
+ *
+ * The tints are the console's own `--tint-*`, so an aside sits on the page at
+ * the same weight a selected band does. */
+:root {
+  --sl-color-blue-low: var(--tint-accent);
+  --sl-color-blue-high: var(--accent);
+  --sl-color-purple: var(--accent);
+  --sl-color-purple-low: var(--tint-accent);
+  --sl-color-purple-high: var(--accent);
+  --sl-color-orange-low: var(--tint-warn);
+  --sl-color-orange-high: var(--state-warn);
+  --sl-color-red-low: var(--tint-danger);
+  --sl-color-red-high: var(--state-danger);
+}
+
+/* ------------------------------------------------------------- on paper -- */
+/* Every value below comes from the same token file under `data-theme="light"`,
+   so nothing here names a colour and nothing has to know which theme is
+   running. */
+:root[data-theme='light'] {
+  --sl-color-white: var(--text-primary);
+  --sl-color-gray-1: var(--text-secondary);
+  --sl-color-gray-2: var(--text-secondary);
+  --sl-color-gray-3: var(--text-tertiary);
+  --sl-color-gray-4: var(--text-muted);
+  --sl-color-gray-5: var(--rule-control);
+  --sl-color-gray-6: var(--rule);
+  --sl-color-gray-7: var(--surface-inset);
+  --sl-color-black: var(--surface-page);
+
+  --sl-color-text-invert: var(--on-accent);
+}
+
+/* --------------------------------------------------------------- voices -- */
+/* TWO VOICES, AND WHICH ONE A WORD IS SET IN IS THE SYSTEM'S STRONGEST SIGNAL.
+   Anything that labels, classifies or measures is `--font-mono` - Questrial,
+   uppercase, tracked. Anything read as language is `--font-ui` in sentence
+   case. Getting that backwards is the most visible way to stop looking like
+   this product. */
+:root {
+  --sl-font: var(--font-ui);
+  --sl-font-system-mono: var(--font-code);
+
+  /* The design system's reading scale, which is what divergence 1 is about. */
+  --sl-text-h1: 34px;
+  --sl-text-h2: 26px;
+  --sl-text-h3: 20px;
+  --sl-text-h4: 17px;
+  --sl-text-h5: 16px;
+
+  --sl-text-body: 16px;
+  --sl-text-body-sm: 14px;
+  --sl-text-sm: 14px;
+  --sl-text-xs: 13px;
+  --sl-text-2xs: 11px;
+
+  --sl-line-height: 1.7;
+  --sl-line-height-headings: 1.25;
+
+  --sl-sidebar-width: 19rem;
+  --sl-nav-height: 3.75rem;
+
+  --measure-prose: 68ch;
+  /* The column the diagrams were drawn for. `docs/diagrams/preview.py` sizes
+     their labels against it, so a figure holds it however wide the pane is. */
+  --measure-figure: 58rem;
+  /* "On this page", when it is a column at all (72rem and up). */
+  --toc-width: 17rem;
+}
+
+/* THE COLUMN IS THE WHOLE PANE, AND IT STARTS AT THE SIDEBAR.
+ *
+ * Starlight centres a column of `--sl-content-width` in whatever the two
+ * sidebars leave, and pushes it to the end of its pane beside a table of
+ * contents. That is right for a site of prose. Here it is wrong twice: every
+ * element in the column holds its own measure except the tables and the code,
+ * so paragraphs would sit in the middle of the screen while tables ran to the
+ * right edge and the page read as right-aligned; and folding the table of
+ * contents widens the pane, so the gap on the left would grow with it.
+ *
+ * So the column fills the pane and the measures are per element: prose and
+ * asides at 68ch, figures at the width they were drawn for, tables and code
+ * to the edge. 100% is a value Starlight's own print stylesheet uses, and it
+ * is also what lines the header's search box up with the column: the header
+ * reserves a centring gap of (pane - content width) / 2, clamped at zero.
+ *
+ * A splash page has no sidebar and keeps Starlight's centred 67.5rem, because
+ * a landing page is centred and there is no left edge to start at. */
+:root[data-has-sidebar] {
+  --sl-content-width: 100%;
+}
+
+body,
+.sl-markdown-content {
+  font-weight: var(--weight-ui);
+}
+
+/* Headings are structure, so they are Questrial. One cut, so no rule here sets
+   a weight on them: the size and the fill do the emphasis, and asking for 600
+   would get a synthesised smear. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6),
+.site-title,
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: normal;
+  color: var(--text-primary);
+}
+
+/* THE WORDMARK, AND IT IS THE WHOLE OF THE BRAND - there is no logomark here
+   because the console carries none. What makes the name read as a mark
+   rather than as a word is the tracking and the scale, never the weight. Set
+   exactly as `.brand-name` sets it. */
+.site-title {
+  font-size: var(--size-wordmark);
+  line-height: 1;
+  letter-spacing: var(--track-wordmark);
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+/* A label, a classification, a measurement: caps, tracked, and the structural
+   face. `--size-label` is the console's own 10px step. */
+.sidebar-content .group-label span,
+.version-select__label {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: var(--size-label);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label, 0.1em);
+  color: var(--text-muted);
+}
+
+/* Prose holds a measure; a code block does not. See divergence 2. An aside is
+   a paragraph with a border, so it holds the paragraph's measure: at the
+   width of a table it would be a band with a sentence at one end. */
+.sl-markdown-content > :is(p, ul, ol, blockquote, .starlight-aside) {
+  max-width: var(--measure-prose);
+}
+
+/* Code is the fourth family and is not a voice. It is the one thing on these
+   pages a person will paste into a terminal. */
+.sl-markdown-content code,
+.expressive-code code {
+  font-family: var(--font-code);
+  font-weight: 400;
+}
+
+.sl-markdown-content code {
+  font-size: 0.875em;
+}
+
+/* A figure is Tomorrow, which is the whole reason that family is loaded: a
+   measurement should be tellable from its label before either is read. The
+   size token decides it, not the call site. */
+.sl-markdown-content .figure {
+  font-family: var(--font-figure);
+  font-weight: var(--weight-figure);
+  font-size: var(--size-figure);
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- shape -- */
+/* The system's shapes, and they are not square: 10px for a panel or a control,
+   pill for anything pressed or toggled. */
+.sl-markdown-content :is(table, .starlight-aside),
+.card,
+dialog,
+site-search dialog {
+  border-radius: var(--radius);
+}
+
+/* A code block is a frame, not a `pre`, and rounding the `pre` alone is what
+   made it look wrong: Expressive Code wraps every block in a figure with its
+   own border and a figcaption title bar, so a rounded `pre` sat inside a
+   square header and a square border.
+ *
+ * The radius therefore goes on Expressive Code's own token, which every part
+ * of the frame derives from, and the `pre` gets none of its own. The frame's
+ * outer edge is `calc(--ec-brdRad + --ec-brdWd)`, so the token is a pixel
+ * under `--radius` to land the visible corner exactly on it. */
+.expressive-code {
+  --ec-brdRad: calc(var(--radius) - 1px);
+  --ec-brdCol: var(--rule);
+  /* The body is an inset within the page and the title bar is the page
+     itself, which is the same relationship `.detail` has in the console. */
+  --ec-frm-edBg: var(--surface-inset);
+  --ec-frm-trmBg: var(--surface-inset);
+  --ec-frm-edTabBarBg: var(--surface-page);
+  --ec-frm-trmTtbBg: var(--surface-page);
+  --ec-frm-edActTabBg: var(--surface-inset);
+}
+
+.expressive-code pre {
+  border-radius: 0;
+}
+
+a.sl-link-button,
+button,
+.pagination-links a {
+  border-radius: var(--radius-pill);
+}
+
+/* THE ACCENT IS NOT THE CTA. `--accent` marks what is current - the active nav
+   item, every link; `--cta` marks what to press, and this is the only rule on
+   the site that spends it, exactly as `.btn.primary` is the only one in the
+   console. Empower is 1.7:1 on paper and can never set a word, which is why
+   the text on it is the page ground. */
+a.sl-link-button.primary {
+  background: var(--cta);
+  color: var(--on-cta);
+  border-color: transparent;
+}
+
+a.sl-link-button.primary:hover,
+a.sl-link-button.primary:focus-visible {
+  background: var(--cta-hover);
+  color: var(--on-cta);
+  border-color: transparent;
+}
+
+/* THE ACTIVE PAGE IS A TINT AND A LEADING EDGE, NOT A SOLID FILL.
+ *
+ * Starlight fills it with the accent and inverts the text. The console
+ * deliberately does not, and the argument carries here: a solid accent fill
+ * makes the active item the brightest thing on the screen, and it sits in a
+ * sidebar rather than on a control anybody presses. The tint carries the same
+ * signal at a fraction of the weight, the accent moves to the label where the
+ * contrast is wanted, and the leading edge does the locating - the same device
+ * `.detail` uses in the console to say which row opened it.
+ *
+ * It cannot be a heavier weight instead: the label is Lexend here, but the
+ * console's reason holds in shape - weight is not what says "you are here". */
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  background: var(--tint-accent);
+  color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: var(--weight-ui);
+}
+
+/* An aside's title is the one place a label wants a step above body weight,
+   and the step is the token's, not Starlight's 600. */
+.starlight-aside__title {
+  font-weight: var(--weight-ui-strong);
+}
+
+/* ------------------------------------------- folding "On this page" ------ */
+/*
+ * Starlight's right column and the main pane are two flex siblings whose
+ * widths are computed from `--sl-sidebar-width` and `--sl-content-width`, and
+ * only above 72rem - below that the table of contents is a dropdown and there
+ * is no column to fold. So everything here lives in that media query and works
+ * by giving the two siblings different widths, rather than by hiding one and
+ * hoping the other reflows.
+ *
+ * Collapsed is a rail, not nothing: the button has to survive its own press or
+ * there is no way back.
+ */
+:root {
+  --toc-rail: 2.75rem;
+}
+
+.toc-fold {
+  display: none;
+}
+
+@media (min-width: 72rem) {
+  /* THE COLUMN IS A FIXED WIDTH, AND THE PANE TAKES THE REST.
+   *
+   * Starlight gives this column its sidebar width plus half of whatever the
+   * content does not use, so on a wide monitor it grows to a third of the
+   * screen: a list of headings in a band of empty grey, with the fold button
+   * stranded in the middle of it if it sits a fixed distance in from the
+   * column's start. A list of headings needs a fixed width, and what
+   * that frees goes to the tables.
+   *
+   * `.right-sidebar` is `position: fixed`, and Starlight sizes it `100%`,
+   * which for a fixed element is the viewport - so it would be viewport-wide
+   * with only its first few hundred pixels the visible column. Giving it the
+   * column's width makes the box the column, which is what lets the button be
+   * pinned to its end edge rather than measured in from the start. */
+  .right-sidebar-container,
+  .right-sidebar {
+    width: var(--toc-width);
+  }
+
+  :root[data-has-sidebar][data-has-toc] .main-pane {
+    width: calc(100% - var(--toc-width));
+  }
+
+  /* Starlight sets `auto 0` here, which pushes the column to the end of the
+     pane beside a table of contents. The column is the pane now (see "the
+     column" above), and this is the other half of starting it at the
+     sidebar. */
+  :root[data-has-sidebar] .main-pane {
+    --sl-content-margin-inline: 0;
+  }
+
+  /* Starlight holds the list at its sidebar width, and at a quarter of the
+     viewport on a narrow one. The column is the measure now. */
+  .right-sidebar-panel .sl-container {
+    width: auto;
+    max-width: none;
+  }
+
+  /* Opposite the "On this page" heading, which shares the other corner. */
+  .toc-fold {
+    position: absolute;
+    top: calc(var(--sl-nav-height) + 0.7rem);
+    inset-inline-end: 0.5rem;
+    z-index: 1;
+
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+  }
+
+  .toc-fold:hover {
+    color: var(--text-primary);
+    background: var(--surface-control);
+  }
+
+  .toc-fold:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* A chevron drawn from a rotated square, so the mark needs no icon file and
+     no inline SVG - it points at the edge the panel folds toward, and flips
+     when it is folded. */
+  .toc-fold__chevron {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-top: 1.5px solid currentcolor;
+    border-inline-end: 1.5px solid currentcolor;
+    transform: rotate(45deg);
+    transition: transform 120ms ease;
+    /* Nudged off-centre: a chevron is optically left of the box it sits in. */
+    margin-inline-start: -0.12rem;
+  }
+
+  .toc-fold[aria-expanded='false'] .toc-fold__chevron {
+    transform: rotate(-135deg);
+    margin-inline-start: 0.12rem;
+  }
+
+  /* The rail. The button keeps its end inset, and the rail is the button's
+     width plus that inset on either side, so the same rule centres it. */
+  :root[data-toc='collapsed'] :is(.right-sidebar-container, .right-sidebar) {
+    width: var(--toc-rail);
+  }
+
+  :root[data-toc='collapsed'] .toc-folding {
+    display: none;
+  }
+
+  /* All three attributes are on the root element - Starlight writes
+     `data-has-sidebar` and `data-has-toc` there, and the fold writes
+     `data-toc` beside them. They are compounded rather than nested for that
+     reason: as a descendant selector this silently matched nothing, and the
+     rail collapsed while the content stayed its old width.
+
+     What the pane gains is exactly what the column gives up, and prose keeps
+     its measure, so what the fold widens is a table and a code block. */
+  :root[data-toc='collapsed'][data-has-sidebar][data-has-toc] .main-pane {
+    width: calc(100% - var(--toc-rail));
+  }
+}
+
+/* ------------------------------------------------------- version select -- */
+.version-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0 0 1rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule-inner);
+}
+
+.version-select__field {
+  position: relative;
+  display: block;
+}
+
+/* The same rotated square the fold button uses, so the two chevrons on this
+   page are one shape. `1rem` from the edge rather than the native inset,
+   because a pill's border has curved away by then. */
+.version-select__field::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: 1rem;
+  top: 50%;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-top: -0.3rem;
+  border-inline-end: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: rotate(45deg);
+  color: var(--text-muted);
+  /* The select underneath keeps every click and every keystroke. */
+  pointer-events: none;
+}
+
+.version-select__control {
+  width: 100%;
+  /* Room for the chevron above, and then some: text running under it reads as
+     a truncation rather than as a control. */
+  padding: 0.4rem 2.1rem 0.4rem 0.9rem;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-ui);
+  font-size: var(--sl-text-sm);
+  color: var(--text-primary);
+  background: var(--surface-control);
+  border: 1px solid var(--rule-control);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  /* Drops the native arrow, which is what the wrapper's chevron replaces. */
+  appearance: none;
+}
+
+.version-select__control:hover {
+  background: var(--surface-control-hover);
+}
+
+.version-select__control:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.version-select__control:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* ----------------------------------------------------------------- misc -- */
+/* The banner sits above the nav; give it the hairline the rest of the chrome
+   has so it reads as part of the frame rather than as content. */
+.sl-banner {
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--sl-text-sm);
+  font-weight: var(--weight-ui);
+}
+
+/* Starlight sets the banner's link in the banner's ink. It is a link like any
+   other on these pages, so it is the accent like any other. */
+.sl-banner a {
+  color: var(--accent);
+}
+
+/* Both numeric faces have proportional digits and neither ships `tnum`, so a
+   number changes width with its value. Every numeric column is right-aligned,
+   which is what keeps a table readable. */
+.sl-markdown-content table :is(td, th).numeric {
+  text-align: right;
+}
+
+/* EVERY TABLE IS THE WIDTH OF THE COLUMN.
+ *
+ * Not `display: block` at `width: fit-content`, because then a table of short
+ * cells ends wherever its cells do and a table of long ones fills the column:
+ * two tables on one page have two right edges. A block-level table cannot be
+ * told to fill its container, because its rows live in an anonymous inner box
+ * no selector reaches, so they are real tables at 100%.
+ *
+ * What block display would buy is horizontal scrolling, and one table needs it:
+ * the configuration reference, whose identifiers must not wrap - a key broken
+ * across two lines is a key somebody copies wrong - and are together wider than
+ * a phone. Its generator wraps it in `.table-wrap`, which scrolls. A reader can
+ * scroll to a column, and cannot un-break an identifier.
+ *
+ * On a narrow screen every table goes back to scrolling by itself, because a
+ * long variable name in any table is wider than a phone and there "full width"
+ * is what a table already is. */
+.sl-markdown-content table {
+  display: table;
+  width: 100%;
+}
+
+.sl-markdown-content .table-wrap {
+  overflow-x: auto;
+  /* A persistent scrollbar rather than the overlay one macOS hides until you
+     move. A table that is cut off at the right edge with nothing to say it
+     scrolls reads as a table that is cut off. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-control) transparent;
+}
+
+.sl-markdown-content .table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+
+.sl-markdown-content .table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sl-markdown-content .table-wrap::-webkit-scrollbar-thumb {
+  background: var(--rule-control);
+  border-radius: var(--radius-pill);
+}
+
+@media (max-width: 50rem) {
+  .sl-markdown-content table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* Identifiers do not wrap, in the reference tables and nowhere else. Not every
+   table, because that holds the paragraph in a two-column "What you get" on
+   one line; and not every table of four columns or more, because that still
+   catches ordinary ones and pushes them out of the column. The generator's
+   wrapper is the exact signal: a table inside `.table-wrap` is a
+   reference table and may scroll, and any other table is language and wraps. */
+.sl-markdown-content .table-wrap td:first-child,
+.sl-markdown-content .table-wrap td:nth-child(2) {
+  white-space: nowrap;
+}
+
+/* A DIAGRAM IS NOT PROSE, SO IT DOES NOT HOLD THE PROSE MEASURE - AND IT IS
+   NOT A TABLE, SO IT DOES NOT FILL THE PANE. It takes the column up to the
+   width it was drawn for: past that it would be scaled up and its labels would
+   outgrow the text around them. The figure is that width, not the image, so it
+   starts at the column's left edge like everything else and its caption
+   centres under the picture rather than under the pane. Each is rendered
+   twice, once per theme, and ThemeImage.astro shows the one that matches - a
+   transparent PNG drawn for paper is black line art on #1a1b1e. */
+.sl-markdown-content .diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--measure-figure);
+  margin-block: 2rem;
+}
+
+/* NO `display` HERE, AND THAT IS LOAD-BEARING. Starlight hides the image for
+   the other theme with `display: none` from a selector of two classes; this
+   one is two classes and an element, so a `display: block` on it wins and both
+   diagrams are drawn, dark above light, on every page in either theme. The
+   figure is a flex column instead, which centres the image without touching
+   its display. */
+.sl-markdown-content .diagram img {
+  width: 100%;
+  height: auto;
+}
+
+/* Taller than it is wide: held to 38rem, or it is two screens high. A class,
+   because the policy here drops an inline style silently. */
+.sl-markdown-content .diagram.narrow {
+  max-width: 38rem;
+}
+
+/* A screenshot of the console: an opaque rectangle in the page's own colours,
+   so the hairline is the only thing that says where it ends. No `display`
+   here either, for the reason above. */
+.sl-markdown-content .diagram.frame img {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 10px;
+}
+
+.sl-markdown-content .diagram figcaption {
+  max-width: var(--measure-prose);
+  margin: 0.9rem auto 0;
+  font-size: var(--size-name);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* A row whose description runs to three lines should still read across, so
+   every cell starts at the top rather than floating in the middle of it. */
+.sl-markdown-content table :is(td, th) {
+  vertical-align: top;
+}
+
+/* The manual's licence, under Starlight's footer on every page. Set in the
+   footer's own small, quiet type so it reads as a colophon and not a notice. */
+.licence-note {
+  margin-top: 1.5rem;
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-3);
+}

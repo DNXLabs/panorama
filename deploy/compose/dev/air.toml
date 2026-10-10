@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Watch configuration for the development stack's gateway container.
+#
+# air rebuilds and restarts the binary when a .go file changes. It is a dev-only
+# tool: nothing in the shipped image knows about it, and `make build` is
+# untouched. See deploy/compose/docker-compose.dev.yml.
+
+root = "/src"
+tmp_dir = "/tmp/air"
+
+[build]
+  # The same build the Dockerfile runs, minus the release flags. -trimpath and
+  # the ldflags are deliberately absent: they cost seconds per rebuild and buy
+  # nothing you would look at from a dev loop.
+  cmd = "go build -o /tmp/air/panorama ./cmd/panorama"
+  # `entrypoint`, not the older `bin`: air deprecated that key and warns about
+  # it on every start, and a warning nobody can act on is one people learn to
+  # scroll past.
+  entrypoint = ["/tmp/air/panorama"]
+  args_bin = ["serve"]
+
+  # Only the trees that hold Go source. Left unset, air walks the whole
+  # repository - including ui/app/node_modules, which is tens of thousands of
+  # files it would re-stat on every poll.
+  #
+  # The cost of naming them: a change to go.mod is not noticed, because the file
+  # is at the root. That is a `make tidy` moment rather than an edit, and
+  # `make dev-restart` picks it up.
+  include_dir = ["cmd", "internal", "ui"]
+  include_ext = ["go"]
+
+  # A test file changing is not a reason to restart a running server.
+  exclude_regex = ["_test\\.go"]
+  exclude_dir = ["ui/app", "ui/dist", "ui/node_modules"]
+
+  # Poll rather than wait on inotify. File change events do not cross a bind
+  # mount reliably on macOS, and a watcher that silently stops noticing is worse
+  # than one that costs a little CPU.
+  poll = true
+  poll_interval = 500
+
+  # Coalesce a multi-file save - an editor writing three files, `gofmt -w ./...`
+  # - into one rebuild.
+  delay = 400
+
+  # Keep the last good binary running when a build fails, so a typo mid-edit
+  # does not take the gateway down. The compile error is in the log either way.
+  stop_on_error = false
+
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  main_only = false
+
+[misc]
+  clean_on_exit = true
+
+[screen]
+  clear_on_rebuild = false

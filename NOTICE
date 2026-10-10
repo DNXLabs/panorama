@@ -1,0 +1,30 @@
+Panorama
+Copyright (C) 2026 DNX Technology Pty Ltd and contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3 of the License only (SPDX: AGPL-3.0-only).
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program, in the file LICENSE. If not, see
+<https://www.gnu.org/licenses/>.
+
+Exceptions, recorded file by file in REUSE.toml and by the SPDX header at the
+top of each source file:
+
+- The manual's prose and images (docs/src/content, docs/src/assets/console,
+  docs/src/assets/diagrams) are licensed under Creative Commons Attribution 4.0
+  International (CC-BY-4.0). Code samples within them remain AGPL-3.0-only.
+- The fonts in docs/src/assets/fonts are licensed under the SIL Open Font
+  License 1.1 (OFL-1.1) by their authors.
+- internal/pricefinder/testdata holds copies of public AWS documentation pages,
+  used as test fixtures. They are Amazon's, not covered by this licence.
+
+The text of every licence named here is in LICENSES/.
+
+"Panorama" and "DNX" are names used by DNX Technology Pty Ltd. The licence grants
+no trademark rights in them.

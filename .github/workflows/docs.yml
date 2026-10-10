@@ -1,0 +1,280 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# The documentation site, published to panorama.dnx.ai/docs.
+#
+# WHERE IT GOES, AND WHY THERE ARE THREE PATHS.
+#
+#   /docs           the latest released series. This is the link that ends up
+#                   in a README, an issue and a blog post, and the person
+#                   following it is running a released binary.
+#   /docs/vX.Y      that series, frozen. Never rebuilt: it is what the
+#                   documentation said when vX.Y shipped, not what today's
+#                   prose would say about a release from six months ago.
+#   /docs/next      main, ahead of any release. Reachable and labelled, and
+#                   not the default.
+#
+# The bucket and the distribution belong to the website repository's stack,
+# which owns panorama.dnx.ai. This workflow only uploads and invalidates; it
+# runs no CloudFormation, so it cannot race that repository's deploy.
+#
+# WHICH RELEASE MOVES /docs is decided exactly as the release workflow decides
+# which release moves the `stable` image tag, and for the same reason: a
+# backported v1.3.5 published after v1.4.0 must not drag the unversioned path
+# backwards onto a reader who never asked to go there.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      # The reference pages are generated from these, so a key added to one is
+      # a documentation change whether or not anybody edited docs/.
+      - 'config.example.yaml'
+      - 'policy.example.yaml'
+      - '.github/workflows/docs.yml'
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'config.example.yaml'
+      - 'policy.example.yaml'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to rebuild and publish, e.g. v1.4.0'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Not cancel-in-progress: a half-uploaded version is worse than a slow queue.
+  group: docs-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+
+env:
+  NODE_VERSION: '24'
+  AWS_REGION: ap-southeast-2
+  # The website stack owns the bucket and the distribution, in the same
+  # account. A repository variable, so the tree names no AWS account. The
+  # role trusts the docs environment's subject only, and the environment
+  # admits main and release tags and no other ref: a manual run dispatched
+  # from a feature branch then builds and is refused at the publish step,
+  # which is what should happen to a branch nobody has reviewed.
+  #
+  # It is a role of its own, never the one that deploys the landing page.
+  # That role owns the website stack (CloudFormation, the site bucket, the
+  # distribution's configuration), and sharing it would let any workflow in
+  # this public repository rewrite the landing page. All this one needs:
+  #   cloudformation:DescribeStacks  on the WEBSITE_STACK stack, for its outputs
+  #   s3:ListBucket                  on the docs bucket (DocsBucketName)
+  #   s3:PutObject, s3:DeleteObject  on that bucket's objects
+  #   cloudfront:CreateInvalidation  on the distribution (DistributionId)
+  # and nothing on the site bucket. scripts/deploy.sh is every call it makes.
+  AWS_ROLE_ARN: ${{ vars.DOCS_ROLE_ARN }}
+  WEBSITE_STACK: panorama-landing
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
+      latest: ${{ steps.plan.outputs.latest }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A release build must be the commit that was released, not main.
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      # What this run publishes, and where.
+      - name: Plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TAG:-}" ]; then
+            # A push to main, or a pull request.
+            echo "version=next" >> "$GITHUB_OUTPUT"
+            echo "publish=$([ "$EVENT" = pull_request ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+            # main does not decide what /docs serves, so it leaves the existing
+            # answer alone rather than asserting one.
+            echo "latest=" >> "$GITHUB_OUTPUT"
+            echo "building main -> /docs/next"
+            exit 0
+          fi
+
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::release tag '$TAG' is not vMAJOR.MINOR.PATCH[-prerelease]"
+            exit 1
+          fi
+
+          # A patch does not get a path of its own: v1.2.0 and v1.2.3 are the
+          # same documentation, so a patch overwrites its series.
+          series=$(printf '%s' "$TAG" | sed -E 's/^(v[0-9]+\.[0-9]+)\..*/\1/')
+          echo "version=$series" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+          prerelease=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease)
+
+          # Whether this release is the highest published stable one. A
+          # prerelease never moves /docs: somebody following an unversioned
+          # link is not asking to read the beta manual.
+          if [ "$prerelease" = "true" ]; then
+            echo "latest=" >> "$GITHUB_OUTPUT"
+            echo "::notice::$TAG is a prerelease; publishing /docs/$series only"
+            exit 0
+          fi
+
+          highest=$(
+            {
+              gh release list --limit 200 --json tagName,isDraft,isPrerelease \
+                -q '.[] | select(.isDraft == false) | select(.isPrerelease == false) | .tagName'
+              printf '%s\n' "$TAG"
+            } | sort -u | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+          )
+
+          if [ "$highest" = "$TAG" ]; then
+            echo "latest=$series" >> "$GITHUB_OUTPUT"
+            echo "building $TAG -> /docs/$series and /docs"
+          else
+            echo "latest=" >> "$GITHUB_OUTPUT"
+            echo "::warning::$TAG is superseded by $highest; publishing /docs/$series only, not moving /docs"
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+        working-directory: docs
+
+      # THE LINK CHECK, which only a build at the unversioned base can make.
+      # Every hand-written link in the manual is `/docs/...`. The validator
+      # knows the pages under the base it is built at, so at /docs/next those
+      # links cannot be checked, and the versioned build below skips them and
+      # rewrites them into its own version afterwards (keepLinksInVersion in
+      # astro.config.mjs). A pull request and a push to main build only `next`,
+      # so without this step a dead cross-reference would reach main unseen -
+      # and on this site a dead link is worse than usual, because the
+      # distribution's 404 serves the landing page.
+      #
+      # It runs first so that docs/dist ends up holding the versioned build,
+      # which is the one the next step uploads.
+      - name: Check links at the unversioned base
+        working-directory: docs
+        run: npm run build
+
+      # The versioned build. `postbuild` checks the inline content against
+      # csp-hashes.json, so a Starlight upgrade that would be silently blocked
+      # by the deployed CSP fails here instead.
+      - name: Build ${{ steps.plan.outputs.version }}
+        working-directory: docs
+        env:
+          DOCS_VERSION: ${{ steps.plan.outputs.version }}
+        run: npm run build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs-${{ steps.plan.outputs.version }}
+          path: docs/dist
+          retention-days: 7
+
+      # The same commit, built again at the unversioned base. Two builds rather
+      # than one copy, because Astro compiles the base path into every URL, so
+      # /docs and /docs/v1.2 cannot be the same bytes.
+      - name: Build the unversioned path
+        if: steps.plan.outputs.latest != ''
+        working-directory: docs
+        run: npm run build
+
+      - uses: actions/upload-artifact@v7
+        if: steps.plan.outputs.latest != ''
+        with:
+          name: docs-latest
+          path: docs/dist
+          retention-days: 7
+
+  publish:
+    name: Publish
+    needs: build
+    # PUBLISH is set in this repository and the public one, never in a fork,
+    # which builds (checking links and the CSP list) and skips this job. The
+    # environment, not the variable, is what the role's trust admits.
+    if: needs.build.outputs.publish == 'true' && vars.PUBLISH == 'true'
+    environment: docs
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: The variables are set
+        run: |
+          if [ -z "$AWS_ROLE_ARN" ]; then
+            echo "::error::repository variable DOCS_ROLE_ARN is not set (see the env block of docs.yml)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: panorama-docs-${{ github.run_id }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: docs-${{ needs.build.outputs.version }}
+          path: docs/dist
+
+      - name: Publish /docs/${{ needs.build.outputs.version }}
+        working-directory: docs
+        env:
+          DOCS_LATEST: ${{ needs.build.outputs.latest }}
+        run: scripts/deploy.sh "${{ needs.build.outputs.version }}"
+
+      - uses: actions/download-artifact@v8
+        if: needs.build.outputs.latest != ''
+        with:
+          name: docs-latest
+          path: docs/dist-latest
+
+      - name: Publish /docs
+        if: needs.build.outputs.latest != ''
+        working-directory: docs
+        env:
+          DOCS_LATEST: ${{ needs.build.outputs.latest }}
+        run: |
+          rm -rf dist && mv dist-latest dist
+          scripts/deploy.sh latest
+
+      - name: Summary
+        run: |
+          {
+            echo "### Docs published"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Version | \`${{ needs.build.outputs.version }}\` |"
+            echo "| URL | https://panorama.dnx.ai/docs/${{ needs.build.outputs.version }}/ |"
+            if [ -n "${{ needs.build.outputs.latest }}" ]; then
+              echo "| Also published to | https://panorama.dnx.ai/docs/ |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

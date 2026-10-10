@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Panorama on Postgres - the production-shaped local stack.
+#
+#   docker compose -f deploy/compose/docker-compose.postgres.yml up --build
+#   curl localhost:8088/healthz
+#
+# Postgres is what to run when one container is not enough: SQLite is held to a
+# single writer, so it does not go past one process. Nothing is unlocked by
+# switching - the background workers are intervals in this process and run the
+# same on either database.
+#
+# The credentials below are development defaults. Override them - and use TLS -
+# anywhere real.
+
+name: panorama-postgres
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-panorama}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-panorama-dev-password}"
+      POSTGRES_DB: "${POSTGRES_DB:-panorama}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-panorama} -d ${POSTGRES_DB:-panorama}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    # Not published by default: nothing outside this stack needs to reach it.
+    # Uncomment to attach a client from the host.
+    # ports:
+    #   - "5432:5432"
+
+  panorama:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      # Which release's found price table to embed: latest, a tag, or none.
+      # See the Dockerfile and PANORAMA_FOUND_PRICES in .env.example.
+      args:
+        FOUND_PRICES: ${PANORAMA_FOUND_PRICES:-latest}
+    image: panorama:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PANORAMA_PORT:-8088}:8088"
+    # The same .env this directory's other compose file reads, and the same
+    # rules: Compose looks for it here rather than in your working directory, it
+    # is optional, and anything set literally below wins over it.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PANORAMA_SERVER_ADDR: ":8088"
+      # The address a browser reaches the console at, which is also the OIDC
+      # redirect URI and what an engineer points a tool at. Defaults to
+      # localhost on the published port; set it in .env for anything else.
+      PANORAMA_SERVER_BASE_URL: "${PANORAMA_SERVER_BASE_URL:-http://localhost:${PANORAMA_PORT:-8088}}"
+      PANORAMA_DATABASE_DRIVER: "postgres"
+      PANORAMA_DATABASE_DSN: "postgres://${POSTGRES_USER:-panorama}:${POSTGRES_PASSWORD:-panorama-dev-password}@postgres:5432/${POSTGRES_DB:-panorama}?sslmode=disable"
+      PANORAMA_DATABASE_AUTO_MIGRATE: "true"
+      PANORAMA_LOG_LEVEL: "${PANORAMA_LOG_LEVEL:-info}"
+      PANORAMA_LOG_FORMAT: "text"
+
+      # Bedrock. Credentials come from the AWS default chain.
+      PANORAMA_BEDROCK_REGION: "${AWS_REGION:-}"
+      AWS_REGION: "${AWS_REGION:-}"
+      AWS_PROFILE: "${AWS_PROFILE:-}"
+    # To use a local AWS profile, uncomment this. Read-only so
+    # the container cannot rewrite your AWS configuration. It is off by default
+    # because a bind mount of a directory you do not have would silently create
+    # an empty one.
+    # volumes:
+    #   - ${HOME}/.aws:/home/nonroot/.aws:ro
+
+volumes:
+  postgres-data:

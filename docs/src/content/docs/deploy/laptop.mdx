@@ -1,0 +1,104 @@
+---
+title: On your laptop
+description: >-
+  Run Panorama on your own machine with Docker Compose and your own AWS
+  credentials, for development or a look at the console. Not for a team.
+sidebar:
+  order: 4
+---
+
+import ThemeImage from '../../../components/ThemeImage.astro';
+import signInDark from '../../../assets/console/sign-in-dark.webp';
+import signInLight from '../../../assets/console/sign-in-light.webp';
+
+This runs Panorama on your own machine with Docker Compose, your own AWS
+credentials and no identity provider. It is for working on Panorama, or for a
+look at the console before you deploy it. Nobody else can use it: it signs you
+in with a development account that only works on `localhost`.
+
+To deploy it for a team, use the [Quickstart](/docs/start/try-it/), which
+deploys on AWS, or [Deploying on a server](/docs/deploy/server/). To change
+Panorama's code, `make dev` runs a stack with hot reload; see `CONTRIBUTING.md`
+in the repository.
+
+## Before you start
+
+- **Docker**, running.
+- **AWS credentials that can invoke Amazon Bedrock**, and the AWS CLI v2. The
+  permissions Panorama needs are in
+  [Requirements](/docs/deploy/requirements/#aws-credentials). Administrator
+  credentials on a sandbox account are fine.
+- **A coding tool**: Claude Code, opencode or Codex CLI.
+
+## Start it
+
+```sh
+git clone https://github.com/dnxlabs/panorama.git
+cd panorama
+cp deploy/compose/.env.example deploy/compose/.env
+```
+
+Add three things to `deploy/compose/.env`: a region, your AWS credentials, and
+a sign-in for this machine.
+
+```sh
+echo "AWS_REGION=us-east-1" >> deploy/compose/.env
+aws configure export-credentials --format env-no-export >> deploy/compose/.env
+echo "PANORAMA_DEV_SIGN_IN_AS=you@example.com" >> deploy/compose/.env
+```
+
+Use the region you invoke Bedrock in. It can be changed in the console later.
+
+The second line exports whatever your current AWS profile resolves to, an SSO
+session included. If those credentials are temporary, run it again and `up -d`
+again when they expire.
+
+:::caution[Both of those are for your own machine only]
+**The credentials** go in a git-ignored file on your machine. A deployment
+uses an instance role or a task role, and you never handle a key.
+
+**`PANORAMA_DEV_SIGN_IN_AS`** lets you into the console as an administrator
+with no identity provider, which a real deployment signs people in through.
+Panorama refuses to start with it set unless its address is `localhost`, so it
+cannot be left on by accident somewhere other people can reach. Never set it
+on a server.
+:::
+
+Start it. The compose file builds from source, so the first run takes a few
+minutes:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml up -d --build
+curl localhost:8088/healthz
+```
+
+## Sign in
+
+Open `http://localhost:8088` and press **Sign in as the development account**,
+at the bottom of the card. Ignore the one-time code above it, which is how a
+real deployment connects its identity provider.
+
+<ThemeImage
+  frame
+  dark={signInDark}
+  light={signInLight}
+  alt="The first-run card. A one-time code field at the top, and under it a Development sign-in is enabled notice with the button Sign in as the development account."
+  caption="A new deployment. The button you want is the last one on the card."
+/>
+
+You land on **Analytics**, as an administrator. From here, follow the
+Quickstart from
+[Check that Panorama can reach Bedrock](/docs/start/try-it/#4-check-that-panorama-can-reach-bedrock)
+onwards: the console is the same. If the check fails, the usual cause on a
+laptop is temporary credentials that have expired: run the
+`aws configure export-credentials` line and `up -d` again.
+
+## Clean up
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml down -v
+rm deploy/compose/.env
+```
+
+`-v` deletes the database volume. Removing `.env` removes the credentials you
+exported.

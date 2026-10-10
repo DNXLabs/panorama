@@ -1,0 +1,95 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  # The end-to-end suite is behind a build tag, so without this it is invisible
+  # to the linter - which is the wrong way round: it runs subprocesses, binds
+  # ports and reads files, and is the code most worth having gosec and bodyclose
+  # look at.
+  build-tags:
+    - e2e
+    - live
+
+linters:
+  default: standard
+  enable:
+    # Correctness
+    - bodyclose        # HTTP response bodies must be closed - a proxy leaks fast otherwise
+    - errorlint        # %w and errors.Is/As used properly
+    - noctx            # no HTTP requests without a context
+    - rowserrcheck     # sql.Rows.Err() checked
+    - sqlclosecheck    # sql.Rows and sql.Stmt closed
+    - contextcheck     # no context.Background() where one was passed in
+
+    # Security. Anything crossing a trust boundary gets scrutinised.
+    - gosec
+
+    # Clarity
+    - gocritic
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+    - nolintlint       # every //nolint must name a linter and give a reason
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+    govet:
+      enable-all: true
+      disable:
+        # Struct field alignment is not worth reordering readable structs for.
+        - fieldalignment
+
+    gosec:
+      excludes:
+        # G104 duplicates errcheck.
+        - G104
+
+    revive:
+      rules:
+        - name: exported
+          # Package comments are enforced; a stuttering name is a style call.
+          arguments: ["disableStutteringCheck"]
+        - name: context-as-argument
+        - name: errorf
+        - name: indent-error-flow
+        - name: var-declaration
+        - name: unreachable-code
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+    staticcheck:
+      checks: ["all"]
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      # Test code makes deliberate use of predictable inputs, ad-hoc SQL, and
+      # unchecked cleanup; holding it to the gateway's standards produces noise
+      # rather than safety.
+      - path: _test\.go
+        linters:
+          - gosec
+          - unparam
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/dnxlabs/panorama

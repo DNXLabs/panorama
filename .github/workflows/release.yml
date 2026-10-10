@@ -1,0 +1,650 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Publishing the image a customer actually runs.
+#
+# One build, two architectures, several tags, pushed to ECR Public
+# (public.ecr.aws/dnxsolutions/panorama) when a GitHub release is published. The release tag is the version: `v1.4.0` becomes
+# the image `panorama:v1.4.0`, stamped into the binary so `panorama version`
+# agrees with the thing that was released.
+#
+# Three rules this file exists to hold:
+#
+#   - The unit that gets deployed is a digest. Tags are pointers, and every
+#     moving tag here is a convenience for humans. A task definition should
+#     reference the digest this workflow prints, never `stable` - ECS will not
+#     re-pull a tag it already has, so a moving tag gives you either a silent
+#     no-op deploy or a fleet running two versions.
+#   - A channel is one build with several names, never a rebuild. `v1.4.0` and
+#     `stable` are the same bytes because they are pushed from one build, which
+#     is what makes "the beta proved something about what shipped" true.
+#   - A channel tag only ever moves forward. Publishing a backported v1.3.5
+#     after v1.4.0 exists must not drag `stable` backwards onto every
+#     deployment following that channel - so whether a release moves its
+#     channel is computed from every published release, not assumed from the
+#     fact that this one is the newest by date.
+#
+# The release also carries the CloudFormation template, with ImageTag's
+# default set to its own version (deploy/cloudformation/release-template.sh),
+# so a template and the image it runs are versioned together. It is attached
+# to the GitHub release, which is what
+# github.com/dnxlabs/panorama/releases/latest/download/panorama.yaml serves,
+# and copied to a public bucket, which is what the Launch Stack button opens:
+# CloudFormation's quick-create page reads a template from S3 and nowhere else.
+name: Release
+
+on:
+  release:
+    types: [published]
+  # For the case this file will actually be re-run for: the build succeeded,
+  # the push failed, and nobody wants to delete and recreate a release to get
+  # another attempt.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and push, e.g. v1.4.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Not cancel-in-progress: a half-pushed manifest list is worse than a slow
+  # queue, and two runs for one tag is already the unusual case.
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+
+# Every account-specific value is a repository variable, so the tree names no
+# AWS account and a fork changes variables rather than this file. The first
+# step refuses to run while any of them is unset.
+env:
+  # Where every release is published. ECR Public's API exists in us-east-1
+  # only, whichever region the image is pulled from.
+  PUBLIC_REPOSITORY: public.ecr.aws/dnxsolutions/panorama
+  PUBLIC_REPOSITORY_NAME: panorama
+  PUBLIC_REGION: us-east-1
+  # Assumed through OIDC; no access key exists for it. It needs, on *,
+  # ecr-public:GetAuthorizationToken and sts:GetServiceBearerToken (both
+  # account-level), and on arn:aws:ecr-public::<account>:repository/panorama
+  # BatchCheckLayerAvailability, InitiateLayerUpload, UploadLayerPart,
+  # CompleteLayerUpload, PutImage, DescribeImages and DescribeRepositories.
+  # Its trust admits the release environment's subject only.
+  PUBLIC_ROLE_ARN: ${{ vars.ECR_PUBLIC_PUSH_ROLE_ARN }}
+  # The found price table (see prices.yml), which every release embeds so an
+  # air-gapped deployment prices the models the Price List API does not
+  # publish. Read with the role that writes it, in the account the Prices
+  # workflow runs in, before the ECR role replaces it.
+  PRICES_ROLE_ARN: ${{ vars.PRICES_ROLE_ARN }}
+  # A versioned bucket, so a release records which version of the table it
+  # embedded.
+  PRICES_BUCKET: ${{ vars.PRICES_BUCKET }}
+  PRICES_KEY: pricing/found_prices.json
+  PRICES_REGION: ${{ vars.PRICES_REGION }}
+  # The public bucket the Launch Stack button reads the template from. Named
+  # here and not in a variable, like PUBLIC_REPOSITORY: the manual links to
+  # it, so it is part of the published interface rather than a detail of one
+  # account. Objects are public by the bucket's policy; nothing here sets an
+  # ACL.
+  TEMPLATE_BUCKET: panorama-public-artifacts
+  TEMPLATE_PREFIX: panorama
+  TEMPLATE_REGION: us-east-1
+  # The docs role publishes it, because publishing what the manual links to
+  # is the job that role already has. Beyond what docs.yml lists, it needs
+  # s3:PutObject on arn:aws:s3:::<TEMPLATE_BUCKET>/<TEMPLATE_PREFIX>/*, and
+  # its trust already admits the docs environment, which admits release tags.
+  TEMPLATE_ROLE_ARN: ${{ vars.DOCS_ROLE_ARN }}
+
+jobs:
+  publish:
+    name: Build and push
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      channel: ${{ steps.tags.outputs.channel }}
+
+    # Runs only where the repository variable PUBLISH is 'true': this
+    # repository and the public one, never a fork, which does not have it and
+    # sees the job skipped rather than failed. The guard is not the security
+    # boundary - the environment is, because the role's trust admits only this
+    # environment's subject - so a fork that sets the variable fails at the
+    # AWS login, which is the right outcome.
+    if: vars.PUBLISH == 'true'
+
+    # Both roles this job assumes trust this environment's subject and nothing
+    # else - repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:release - so
+    # a workflow that is not a release cannot assume them. The environment
+    # admits tags matching v* only; the step printing the subject below is
+    # the one to read if an assume fails.
+    environment: release
+
+    permissions:
+      # The OIDC trust with AWS, and the identity the provenance is signed with.
+      id-token: write
+      # Only to attach image.json to the release being published. Nothing here
+      # pushes a commit or moves a tag.
+      contents: write
+      # The build provenance attestation.
+      attestations: write
+
+    steps:
+      # A variable that is not set is an empty string, which would surface
+      # three steps later as an AWS error naming none of them.
+      - name: The publishing variables are set
+        id: vars
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in PUBLIC_ROLE_ARN PRICES_ROLE_ARN PRICES_BUCKET PRICES_REGION; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::repository variables not set for:$missing (see the env block of release.yml)"
+            exit 1
+          fi
+
+      - name: Resolve the release tag
+        id: tag
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          # The version is the tag, unaltered. A release named anything else is
+          # refused here rather than producing an image tagged something nobody
+          # can predict from the release they are looking at.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::release tag '$TAG' is not vMAJOR.MINOR.PATCH[-prerelease]"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          # The release tag, not the default branch: a workflow_dispatch rerun
+          # weeks later must build the commit that was released.
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+
+      # Which pointers this release is allowed to move.
+      #
+      # Two tags at most: the version, which is immutable and is the only one a
+      # deployment should ever name, and the channel - `stable` for a release,
+      # `beta` for a prerelease - and the channel only if this is the highest
+      # published release of its kind. A prerelease never touches `stable`.
+      #
+      # Major and minor series pointers (`1`, `1.4`) are deliberately not
+      # written. Nothing consumes them: the CloudFormation template offers
+      # stable and beta and no third thing.
+      - name: Decide which tags this release writes
+        id: tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          prerelease=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease)
+
+          # Every published release of the same kind, plus this one. This one is
+          # added explicitly rather than relied upon: the list is read seconds
+          # after the release was published, and a release missing from it would
+          # otherwise make this run think it was superseded and silently decline
+          # to move any pointer.
+          published=$(
+            {
+              gh release list --limit 200 --json tagName,isDraft,isPrerelease \
+                -q ".[] | select(.isDraft == false) | select(.isPrerelease == $prerelease) | .tagName"
+              printf '%s\n' "$TAG"
+            } | sort -u
+          )
+
+          # highest SCOPE_REGEX - the greatest published version matching it.
+          highest() {
+            printf '%s\n' "$published" | grep -E "$1" | sort -V | tail -1
+          }
+
+          tags="$TAG"
+          if [ "$prerelease" = "true" ]; then
+            if [ "$(highest '^v[0-9]+\.[0-9]+\.[0-9]+-')" = "$TAG" ]; then
+              tags="$tags beta"
+            fi
+          elif [ "$(highest '^v[0-9]+\.[0-9]+\.[0-9]+$')" = "$TAG" ]; then
+            tags="$tags stable"
+          fi
+
+          # The channel is read back out of what was actually written rather
+          # than set alongside it, so that image.json cannot claim a release is
+          # on a channel whose pointer this run declined to move.
+          channel=none
+          case " $tags " in
+            *" stable "*) channel=stable ;;
+            *" beta "*) channel=beta ;;
+          esac
+
+          # Said out loud, because an operator following a channel would
+          # otherwise have no way to tell "the release did not move my channel"
+          # from "the release failed".
+          if [ "$channel" = none ]; then
+            echo "::warning::$TAG is superseded by a higher published release; writing only the version tag, moving no channel"
+          fi
+
+          {
+            echo "registry=$PUBLIC_REPOSITORY"
+            echo "prerelease=$prerelease"
+            echo "highest_stable=$(highest '^v[0-9]+\.[0-9]+\.[0-9]+$')"
+            echo "channel=$channel"
+            echo "names=$tags"
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "docker_tags<<EOF"
+            for t in $tags; do echo "${PUBLIC_REPOSITORY}:${t}"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "writing: $tags"
+
+      # What this run claims to be.
+      #
+      # AWS returns the same "Not authorized to perform
+      # sts:AssumeRoleWithWebIdentity" whether a trust policy rejected the
+      # subject or the role does not exist, so the message cannot tell the two
+      # apart. This prints the half GitHub controls - the exact subject,
+      # audience and issuer the token carries, which is what a trust policy
+      # matches on. It is the step to read when the role is first created.
+      #
+      # The token is a credential and is never echoed: only its middle segment,
+      # decoded, which is public claims and no signature.
+      - name: What identity this run presents
+        run: |
+          token=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "::add-mask::$token"
+          claims=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+' \
+            | awk '{ r = length($0) % 4; if (r == 2) print $0 "=="; else if (r == 3) print $0 "="; else print $0 }' \
+            | base64 -d 2>/dev/null)
+          echo "$claims" | jq '{iss, aud, sub, repository, repository_owner, ref, workflow}'
+          echo "the trust policy must admit the sub above, and the provider's"
+          echo "client-id list must contain the aud above"
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.PRICES_ROLE_ARN }}
+          aws-region: ${{ env.PRICES_REGION }}
+          role-session-name: panorama-release-prices-${{ github.run_id }}
+
+      # The table replaces the empty copy in the repository before the build
+      # embeds it. A release without it would ship a binary that leaves
+      # GPT-5.x unpriced with nothing saying why, so any failure to read it -
+      # the object missing included - stops the release: run the Prices
+      # workflow, then rerun this one.
+      #
+      # Its shape is checked here because nothing else would until the binary
+      # starts: the Prices workflow is the only writer and loads what it
+      # writes, and this is the check that the object is still what it wrote.
+      - name: Embed the found prices
+        id: prices
+        run: |
+          set -euo pipefail
+          aws s3api get-object --bucket "$PRICES_BUCKET" --key "$PRICES_KEY" \
+            --region "$PRICES_REGION" found.json > object.json
+          version=$(jq -r '.VersionId // empty' object.json)
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "::error::s3://$PRICES_BUCKET has versioning off, so this release could not record which table it embedded"
+            exit 1
+          fi
+          rate='^[0-9]+\.[0-9]+$'
+          jq -e --arg rate "$rate" '
+            (.entries | type == "array") and
+            all(.entries[];
+              (.provider | type == "string" and length > 0) and
+              (.model | type == "string" and length > 0) and
+              (.scope == "regional" or .scope == "global") and
+              (.source == "aws-pricing-api" or .source == "aws-model-card") and
+              (.found_at | type == "string") and
+              (.input | test($rate)) and (.output | test($rate)))
+          ' found.json > /dev/null || {
+            echo "::error::s3://$PRICES_BUCKET/$PRICES_KEY (version $version) is not a table the binary can load"
+            exit 1
+          }
+          cp found.json internal/pricing/found_prices.json
+          digest=$(sha256sum internal/pricing/found_prices.json | cut -c1-12)
+          rows=$(jq '.entries | length' found.json)
+          echo "embedding $rows found prices, version $version, $digest"
+          {
+            echo "version=$version"
+            echo "digest=$digest"
+            echo "rows=$rows"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.PUBLIC_ROLE_ARN }}
+          aws-region: ${{ env.PUBLIC_REGION }}
+          role-session-name: panorama-release-${{ github.run_id }}
+
+      - name: Who are we
+        run: aws sts get-caller-identity
+
+      # A version tag is a promise that the bytes behind it never change, and
+      # ECR Public has no immutability setting to keep it, so this step is
+      # what keeps it: a tag that already exists is refused before anything is
+      # built. The channel tags are meant to move and are not checked.
+      #
+      # "Repository does not exist" would otherwise arrive from `docker push`
+      # as a generic authorization failure, which sends whoever is reading it
+      # to the trust policy rather than to the missing repository, so the
+      # repository is asked for first.
+      #
+      # A rerun after a push that failed part way finds the version tag there
+      # if that part was the version tag. Delete it deliberately
+      # (aws ecr-public batch-delete-image) and rerun; nothing here does that
+      # on its own, because a rerun that could overwrite a version could
+      # overwrite a good one.
+      - name: The version tag is new
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          aws ecr-public describe-repositories --region "$PUBLIC_REGION" \
+            --repository-names "$PUBLIC_REPOSITORY_NAME" --query 'repositories[0].repositoryUri' --output text
+          if out=$(aws ecr-public describe-images --region "$PUBLIC_REGION" \
+              --repository-name "$PUBLIC_REPOSITORY_NAME" \
+              --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text 2>&1); then
+            echo "::error::$PUBLIC_REPOSITORY:$TAG already exists ($out). A version tag is never overwritten; release a new version"
+            exit 1
+          elif printf '%s' "$out" | grep -q 'ImageNotFoundException'; then
+            echo "$TAG is new"
+          else
+            echo "::error::could not ask ECR Public whether $TAG exists: $out"
+            exit 1
+          fi
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+
+      - uses: docker/setup-buildx-action@v4
+
+      # No QEMU. The Dockerfile pins its console and build stages to
+      # BUILDPLATFORM, so arm64 is produced by cross-compilation on the amd64
+      # runner rather than by emulating one.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.docker_tags }}
+          # FOUND_PRICES=none because the table embedded above is the one
+          # this release ships, even when it is empty; the build must never
+          # reach for a previous release's instead.
+          build-args: |
+            VERSION=${{ steps.tag.outputs.tag }}
+            COMMIT=${{ github.sha }}
+            DATE=${{ steps.tags.outputs.date }}
+            FOUND_PRICES=none
+          # Read only. A GitHub Actions cache is readable from the ref that
+          # wrote it or from the default branch, and nothing else - so a cache
+          # written under refs/tags/v1.4.0 can never be read again, because
+          # every tag is a ref of its own. Exporting one costs about 23 seconds
+          # and buys nothing. CI on main populates what this reads, and a
+          # release imports those cached stages, so npm install and the Vite
+          # build do not run at all.
+          #
+          # What is left is the two `go build` invocations, ~127s in parallel,
+          # and no cache configuration reaches them: the source changes every
+          # release and so does the VERSION ldflag, so that layer is a miss by
+          # construction. Shortening it means either persisting Go's own build
+          # cache across runs - BuildKit cache mounts are not exported by
+          # type=gha, so that needs machinery to round-trip them through
+          # actions/cache - or building each platform on its own runner and
+          # merging the manifests, which moves the digest this job reports into
+          # a separate merge step. Neither is worth it for a build that runs a
+          # few times a month.
+          cache-from: type=gha
+          # BuildKit's own attestations stay off: they turn the pushed manifest
+          # list into an index carrying unknown/unknown entries, and the only
+          # thing that settles whether a Fargate pull tolerates that is a
+          # Fargate pull. Provenance is attested below instead, signed with
+          # this run's identity and kept by GitHub rather than in the image
+          # index, so the index stays exactly two images.
+          provenance: false
+          sbom: false
+
+      # The digest is the deliverable. Everything above it is a name.
+      - name: What was pushed
+        id: image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REGISTRY: ${{ steps.tags.outputs.registry }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "${REGISTRY}@${DIGEST}"
+
+          # Both architectures, asserted rather than assumed: a
+          # single-architecture push succeeds quietly and then fails at task
+          # start with an exec format error, on the platform the
+          # CloudFormation template defaults to.
+          platforms=$(docker buildx imagetools inspect "${REGISTRY}@${DIGEST}" --raw \
+            | jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.os)/\(.platform.architecture)"' \
+            | sort | paste -sd, -)
+          if [ "$platforms" != "linux/amd64,linux/arm64" ]; then
+            echo "::error::pushed platforms are '$platforms', want linux/amd64,linux/arm64"
+            exit 1
+          fi
+          echo "platforms=$platforms" >> "$GITHUB_OUTPUT"
+
+      # Which workflow, at which commit of which repository, built these bytes:
+      # signed with this run's OIDC identity and stored with GitHub's
+      # attestations for the repository, so anybody can check an image they
+      # were handed against the public source with
+      #   gh attestation verify oci://public.ecr.aws/dnxsolutions/panorama:<tag> -R dnxlabs/panorama
+      # Not pushed to the registry: the attestation is found by digest.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.tags.outputs.registry }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: false
+
+      # Pulls the image back out of the registry rather than trusting the local
+      # build cache, so what is smoke-tested is what a customer would get.
+      # amd64 only: this runner cannot execute the arm64 variant, and adding
+      # QEMU to run `version` once would cost more than it proves.
+      - name: Smoke test the pushed image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REGISTRY: ${{ steps.tags.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          got=$(docker run --rm --platform linux/amd64 "${REGISTRY}@${DIGEST}" version)
+          echo "$got"
+          # The release tag is stamped into the binary, so a mismatch here means
+          # the build arg did not reach internal/version and every deployment
+          # would report a version nobody released.
+          printf '%s' "$got" | grep -Fq "$TAG" || {
+            echo "::error::the image reports a version that is not $TAG"
+            exit 1
+          }
+
+      # The template this release ships: the repository's, with ImageTag's
+      # default set to this version. Rendered from the tag's checkout, so its
+      # other parameters and resources are the ones this image was built
+      # beside.
+      - name: Render the release's template
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          deploy/cloudformation/release-template.sh "$TAG" > panorama.yaml
+          diff deploy/cloudformation/panorama.yaml panorama.yaml || true
+
+      # The same provenance as the image, so a template somebody was handed
+      # can be checked against the public source:
+      #   gh attestation verify panorama.yaml -R dnxlabs/panorama
+      - name: Attest the template
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: panorama.yaml
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: template
+          path: panorama.yaml
+          if-no-files-found: error
+
+      # So that "pin a digest in production" is advice somebody can act on
+      # without a registry client: the release page is where people look.
+      - name: Attach the image reference to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REGISTRY: ${{ steps.tags.outputs.registry }}
+          PLATFORMS: ${{ steps.image.outputs.platforms }}
+          NAMES: ${{ steps.tags.outputs.names }}
+          CHANNEL: ${{ steps.tags.outputs.channel }}
+          PRICES_VERSION: ${{ steps.prices.outputs.version }}
+          PRICES_DIGEST: ${{ steps.prices.outputs.digest }}
+          PRICES_ROWS: ${{ steps.prices.outputs.rows }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg version "$TAG" \
+            --arg digest "$DIGEST" \
+            --arg repository "$REGISTRY" \
+            --arg commit "${{ github.sha }}" \
+            --arg platforms "$PLATFORMS" \
+            --arg tags "$NAMES" \
+            --arg channel "$CHANNEL" \
+            --arg prices_object "s3://$PRICES_BUCKET/$PRICES_KEY" \
+            --arg prices_version "$PRICES_VERSION" \
+            --arg prices_digest "$PRICES_DIGEST" \
+            --argjson prices_rows "$PRICES_ROWS" \
+            '{
+               version: $version,
+               digest: $digest,
+               repository: $repository,
+               image: ($repository + "@" + $digest),
+               commit: $commit,
+               platforms: ($platforms | split(",")),
+               tags: ($tags | split(" ")),
+               channel: $channel,
+               found_prices: {
+                 object: $prices_object,
+                 version: $prices_version,
+                 sha256: $prices_digest,
+                 rows: $prices_rows
+               }
+             }' > image.json
+          cat image.json
+          # The table itself too, so what a release priced from is readable
+          # without access to the bucket. Its first twelve hex digits are what
+          # the binary logs at startup as found_table.
+          cp internal/pricing/found_prices.json found_prices.json
+          gh release upload "$TAG" image.json found_prices.json panorama.yaml --clobber
+
+      # GitHub marks a newly published release as its latest, by date, so a
+      # backported v1.3.5 published after v1.4.0 would become the release that
+      # /releases/latest/download/panorama.yaml serves - a template that runs
+      # v1.3.5 - while `stable` stayed on v1.4.0. Latest is put back on the
+      # highest published release, the one the stable tag names.
+      - name: Latest is the stable release
+        if: steps.tags.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HIGHEST: ${{ steps.tags.outputs.highest_stable }}
+        run: |
+          set -euo pipefail
+          gh release edit "$HIGHEST" --latest
+          echo "latest release: $HIGHEST"
+
+      - name: Summary
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REGISTRY: ${{ steps.tags.outputs.registry }}
+        run: |
+          {
+            echo "### ${{ steps.tag.outputs.tag }}"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Image | \`${REGISTRY}@${DIGEST}\` |"
+            echo "| Tags | ${{ steps.tags.outputs.names }} |"
+            echo "| Platforms | ${{ steps.image.outputs.platforms }} |"
+            echo
+            echo "Deploy it with the template attached to the release, which"
+            echo "runs this version unless told otherwise:"
+            echo
+            echo '```sh'
+            echo "curl -fsSLO https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/panorama.yaml"
+            echo "aws cloudformation deploy --stack-name panorama \\"
+            echo "  --template-file panorama.yaml \\"
+            echo "  --capabilities CAPABILITY_IAM"
+            echo '```'
+            echo
+            echo "Or by digest: \`--parameter-overrides ImageTag=${DIGEST}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The template the Launch Stack button opens. A job of its own because it
+  # runs as the docs environment, whose role publishes what the manual links
+  # to, and the build job's environment admits none of that role's trust.
+  template:
+    name: Publish the template
+    needs: publish
+    if: vars.PUBLISH == 'true'
+    environment: docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: The publishing variables are set
+        run: |
+          if [ -z "$TEMPLATE_ROLE_ARN" ]; then
+            echo "::error::repository variable DOCS_ROLE_ARN is not set (see the env block of release.yml)"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: template
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.TEMPLATE_ROLE_ARN }}
+          aws-region: ${{ env.TEMPLATE_REGION }}
+          role-session-name: panorama-release-template-${{ github.run_id }}
+
+      # Under its version always, and under its channel when this release
+      # moved the channel's image tag: the same rule, read from the same
+      # output, so `stable/panorama.yaml` never runs anything but the image
+      # `stable` names. A rerun writes the same bytes again.
+      - name: Upload
+        env:
+          TAG: ${{ needs.publish.outputs.tag }}
+          CHANNEL: ${{ needs.publish.outputs.channel }}
+        run: |
+          set -euo pipefail
+          keys="$TEMPLATE_PREFIX/$TAG/panorama.yaml"
+          if [ "$CHANNEL" != none ]; then
+            keys="$keys $TEMPLATE_PREFIX/$CHANNEL/panorama.yaml"
+          fi
+          for key in $keys; do
+            aws s3api put-object --bucket "$TEMPLATE_BUCKET" --key "$key" \
+              --body panorama.yaml --content-type text/yaml \
+              --cache-control "no-cache" > /dev/null
+            echo "s3://$TEMPLATE_BUCKET/$key"
+          done
+
+          url="https://$TEMPLATE_BUCKET.s3.amazonaws.com/$TEMPLATE_PREFIX/$TAG/panorama.yaml"
+          launch="https://console.aws.amazon.com/cloudformation/home#/stacks/quickcreate?templateURL=$(jq -rn --arg u "$url" '$u|@uri')&stackName=panorama&param_DesiredCount=0"
+          {
+            echo "### Template"
+            echo
+            echo "- $url"
+            echo "- [Launch stack]($launch)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,651 @@
+/* SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+   SPDX-License-Identifier: AGPL-3.0-only */
+
+/*
+ * Panorama console - design tokens.
+ *
+ * This is the `DNX Experience Design System` token set, vendored. The system
+ * ships as seven files under `tokens/` (fonts, colors, typography, spacing,
+ * animation, brand, base); the four the console uses are one file here because
+ * the console imports one file, and each is kept as its own section under its
+ * own name so a re-export can be diffed against it.
+ *
+ * The visual direction is DNX's, on a ground of this console's own choosing:
+ * flat by mandate, geometric type, one warm colour spent only on the thing a
+ * person is meant to press - over neutral grey rather than the system's navy
+ * and ice blue, for the reason argued at the head of the colour section. Two
+ * themes come out of one token set: grey (the default) and paper
+ * (`data-theme="light"`).
+ *
+ * THE RULE THIS FILE EXISTS TO HOLD: nothing in `app/` invents a colour, a
+ * size, or a radius. If a value is needed and no token covers it, it gets added
+ * here - so the system stays the source of truth rather than becoming a thing
+ * the code drifted away from.
+ *
+ * ---------------------------------------------------------------------------
+ * SIX DIVERGENCES FROM THE EXPORTED SYSTEM. Everything else is its own value.
+ *
+ * 1. THE FONTS ARE SELF-HOSTED. The system's `tokens/fonts.css` pulls
+ *    Questrial, Lexend and Mulish from Google Fonts and records that as a
+ *    caveat to be fixed with `@font-face` rules. `app/src/fonts.css` is those
+ *    rules. No third-party origin appears in the CSP; an air-gapped deployment
+ *    is a supported one.
+ *
+ * 2. THE GROUND IS NEUTRAL GREY, AND DARK IS THE DEFAULT. Two departures in
+ *    one. The system's scopes are Secure (a navy) and Adapt (an ice blue); this
+ *    console runs greys under both, because the blue in it is doing work - the
+ *    active route, the attributed series, every link - and an accent on a
+ *    ground of its own hue is not an accent. The argument is at the head of the
+ *    colour section. And dark is unqualified `:root` rather than the alternate,
+ *    which is the system's own ordering inverted: an operations tool people sit
+ *    in front of all day opens dark, a marketing page opens light.
+ *
+ * 3. THE INK RAMPS ARE MEASURED, AND SHORTER THAN SIX STEPS. Every step down to
+ *    the floor clears 4.5:1 against the *worst* ground it can land on - the
+ *    control fill, not the panel - because `--text-muted` sets a table cell and
+ *    a select box alike. Measured rather than eyeballed: the system's
+ *    `--text-muted` for its dark scope is `rgba(255,255,255,0.6)`, which lands
+ *    at 4.38:1 on a control fill; it runs at 0.55 here, which is 5.2:1 on the
+ *    grey control and more on the panel. On paper the system's `grey-500`
+ *    (#6F6F86) is 4.13:1 on a control and runs at #5E6064, which is 5.3:1.
+ *    Raising both floors collapses them onto the step above, which is
+ *    the real finding: this range holds about four distinct legible steps per
+ *    theme, not six. So `--text-faint` aliases `--text-muted` rather than
+ *    pretending to be a step below it, and only `--text-ghost` sits under the
+ *    floor - raised in turn to clear the 3:1 WCAG asks of a non-text mark.
+ *
+ * 4. THE ACCENT AND THE CTA ARE TWO TOKENS, WHICH IS THE SYSTEM'S OWN RULE MADE
+ *    MECHANICAL. The system says it twice: "Evolve + Future for accents and
+ *    interaction", and "Empower is for CTAs only". The console's accent is spent
+ *    28 times as `color`, 25 as `background` and 13 as `border-color` - so a
+ *    single token carrying Empower would have set text in #FFAD6D, which is
+ *    1.7:1 on paper and illegible. `--accent` is therefore Evolve on paper and
+ *    Future on grey, both of which carry text on their own ground; `--cta` is
+ *    Empower in both themes and is spent on `.btn.primary` and nothing else.
+ *    Empower never sets a word and is never a page background, exactly as the
+ *    guidelines ask.
+ *
+ * 5. THERE IS A FOURTH FAMILY, AND IT IS THE ONE NOBODY LOOKS AT. The system
+ *    names two faces plus a system monospace stack; this console runs four.
+ *    Tomorrow is `--font-figure` and is argued for where it is declared below.
+ *    `--font-code` is JetBrains Mono, for the places that render something a
+ *    person will paste into a terminal - `.code` (which is also the block
+ *    CopyBlock copies), the `.input` family and `textarea.input`. It exists because neither brand face is a monospace, and a rendered
+ *    opencode config set in a geometric sans stops being code. It is not a voice
+ *    in the system and never labels anything.
+ *
+ * 6. THE SIZE SCALE IS THE CONSOLE'S, NOT THE SYSTEM'S. The system's scale is
+ *    drawn for marketing and for `dx-box` product screens: body 16px at 1.7, a
+ *    560px measure, labels 11–13. This console puts a five-column table with
+ *    410px of fixed columns on a screen and a 52px figure above it, and at 16px
+ *    body with 1.7 leading none of those screens fit. Families, weights,
+ *    tracking and case are the system's; the sizes are the ones the Analytics
+ *    and My usage screens actually set. The one thing carried over verbatim is
+ *    `--track-wordmark`, the system's 0.18em "EXPERIENCE" tag tracking, which is
+ *    what `Panorama·DNX·AI` is set in.
+ */
+
+/* ======================================================== tokens/colors.css */
+
+/* THE GROUND IS GREY, AND THAT IS THIS CONSOLE'S OWN DEPARTURE.
+ *
+ * The design system's dark scope is Secure - #252540, a navy that is about 40%
+ * blue - and its light scope is Adapt, an ice blue. Both are right for the
+ * surfaces the system was drawn for: a marketing hero is a field of brand
+ * colour, and a `dx-box` screen carries a few figures on it.
+ *
+ * This console is not that. It is a wall of data with a blue accent doing
+ * actual work in it - the active route, the attributed series, the figure a
+ * screen is about, every link - and on a blue ground that accent stops being a
+ * signal, because the ground is already most of the way to it. So the surfaces
+ * are neutral grey and the blue is spent only where it means something. It is
+ * the same argument the system itself makes about Empower one level down:
+ * a colour that is everywhere marks nothing.
+ *
+ * The greys carry a slight cool cast (blue runs about four points above red)
+ * rather than being mathematically neutral, which keeps them from reading
+ * green next to the accent. They are not from the DNX palette and are not
+ * pretending to be.
+ *
+ * What stays the system's: Future and Evolve as the accent, and Empower as the
+ * CTA. Not the logomark: the console carries no company mark, so no brand blue
+ * is spent outside the accent. */
+
+:root {
+  /* ---- the DNX palette, and only what is spent ----
+   * The ground is not from here (see above). These are the hues that carry
+   * meaning: the accent in each theme, and the CTA. */
+  --dnx-evolve: #0057d7; /* Pantone 2935C · blue   - the accent on paper */
+  --dnx-future: #64b5fe; /* Pantone 299C  · sky    - the accent on grey */
+  --dnx-empower: #ffad6d; /* Pantone 2016C · orange - the CTA, and warn */
+  --dnx-white: #ffffff;
+
+  /* ---- base: the dark ground, five steps ----
+   * The page is the darkest and panels lift off it, which is what lets a
+   * panel be a fill rather than a box. */
+  --dark-0: #1a1b1e; /* the page */
+  --dark-1: #212327; /* the panel */
+  --dark-2: #26282c; /* an inset within a panel */
+  --dark-3: #2d2f34; /* a control */
+  --dark-4: #383a40; /* a control under the pointer */
+  --dark-sheet: #212327;
+
+  /* ---- base: the paper ground ---- */
+  --paper-0: #f4f4f6; /* the page */
+  --paper-1: #ffffff; /* the panel */
+  --paper-2: #fafafb; /* an inset */
+  --paper-3: #ebecef; /* a control */
+  --paper-4: #e1e2e6; /* a control under the pointer */
+  --paper-chrome: #f7f7f9;
+
+  /* ---- ink ramps ----
+   * Four legible steps and a mark. Every step down to the floor clears 4.5:1 on
+   * `--surface-control`, which is the lightest ground in the dark theme and the
+   * darkest in the light one - the worst case either way. See divergence 3.
+   * Re-measured against the grey ground rather than carried over, and the
+   * figures below are read off the shipped stylesheet rather than computed by
+   * hand - each rgba step composited over the resolved control fill in a
+   * browser running this file, in both themes. A darker control gives the dark
+   * ramp more headroom than the navy did. */
+  --light-100: #ffffff; /* 13.4:1 on control */
+  --light-80: rgba(255, 255, 255, 0.85); /* 10.1:1 */
+  --light-65: rgba(255, 255, 255, 0.7); /*  7.4:1 */
+  --light-50: rgba(255, 255, 255, 0.55); /*  5.2:1 on control - the floor */
+  --light-35: var(--light-50); /* an alias, not a step: see divergence 3 */
+  --light-20: rgba(255, 255, 255, 0.4); /*  3.5:1 on control - marks only */
+
+  --ink-100: #1a1b1e; /* 14.6:1 on control - the dark theme's page, which is the symmetry */
+  --ink-80: #3a3c40; /*  9.4:1 */
+  --ink-65: #4b4d52; /*  7.2:1 */
+  --ink-50: #5e6064; /*  5.3:1 on control - the floor */
+  --ink-35: var(--ink-50);
+  --ink-20: #7f8186; /*  3.3:1 on control - marks only */
+
+  /* ---- accent, CTA and states ----
+   * The accent marks the active nav item, selection tints and the one figure a
+   * screen is about. The CTA is Empower and is spent on the primary button
+   * alone - see divergence 4. Warn means "no cap governs this"; danger is
+   * destructive-only. Both darken on paper so contrast holds, exactly as the
+   * system's own warn and danger do. */
+  --accent: var(--dnx-future);
+  --accent-hover: #8ac8ff;
+  --accent-rgb: 100, 181, 254;
+
+  --cta: var(--dnx-empower);
+  --cta-hover: #f59a52;
+  --on-cta: var(--dark-0); /* the page grey on Empower - 9.4:1 */
+
+  --warn-on-dark: var(--dnx-empower);
+  --warn-on-light: #8a5a17; /* Empower darkened: 5.0:1 on control. #FFAD6D is 1.7:1. */
+  --danger-on-dark: #f08a93; /* DNX danger lightened: 5.6:1 on control. #D7263D is 2.9:1. */
+  --danger-on-light: #b01e31; /* DNX danger darkened: 5.8:1 on control. #D7263D is 4.2:1. */
+
+  /* ---- semantic: the grey console is the default theme ---- */
+  --surface-page: var(--dark-0);
+  --surface-panel: rgba(33, 35, 39, 0.86);
+  --surface-chrome: rgba(26, 27, 30, 0.88);
+  --surface-inset: var(--dark-2);
+  --surface-control: var(--dark-3);
+  --surface-control-hover: var(--dark-4);
+  --surface-sheet: var(--dark-sheet);
+
+  --text-primary: var(--light-100);
+  --text-secondary: var(--light-80);
+  --text-tertiary: var(--light-65);
+  --text-muted: var(--light-50);
+  --text-faint: var(--light-35);
+  --text-ghost: var(--light-20);
+
+  --rule-strong: var(--light-100);
+  --rule: rgba(255, 255, 255, 0.12);
+  --rule-inner: rgba(255, 255, 255, 0.08);
+  --rule-control: rgba(255, 255, 255, 0.22);
+  --rule-divider: rgba(255, 255, 255, 0.09);
+
+  --hover-row: rgba(255, 255, 255, 0.03);
+  --hover-nav: rgba(255, 255, 255, 0.045);
+  --row-selected: rgba(var(--accent-rgb), 0.06);
+  --band-selected: rgba(var(--accent-rgb), 0.14);
+  --tint-accent: rgba(var(--accent-rgb), 0.12);
+
+  --dot-grid: rgba(255, 255, 255, 0.1);
+  --on-accent: var(--dark-0); /* the page grey on Future - 7.9:1 */
+  --state-warn: var(--warn-on-dark);
+  --state-danger: var(--danger-on-dark);
+  --scrim: rgba(12, 13, 15, 0.55);
+}
+
+[data-theme='light'] {
+  --surface-page: var(--paper-0);
+  --surface-panel: var(--paper-1);
+  --surface-chrome: var(--paper-chrome);
+  --surface-inset: var(--paper-2);
+  --surface-control: var(--paper-3);
+  --surface-control-hover: var(--paper-4);
+  --surface-sheet: var(--paper-1);
+
+  /* Evolve carries text on paper where Future cannot: 5.3:1 against the
+     control fill, against Future's 1.4:1. The CTA does not change - Empower is
+     a fill under dark text in both themes, and is legible in both. */
+  --accent: var(--dnx-evolve);
+  --accent-hover: #0047b0;
+  --accent-rgb: 0, 87, 215;
+
+  --text-primary: var(--ink-100);
+  --text-secondary: var(--ink-80);
+  --text-tertiary: var(--ink-65);
+  --text-muted: var(--ink-50);
+  --text-faint: var(--ink-35);
+  --text-ghost: var(--ink-20);
+
+  --rule-strong: var(--ink-100);
+  --rule: #e4e5e8;
+  --rule-inner: rgba(26, 27, 30, 0.08);
+  --rule-control: #d3d5d9;
+  --rule-divider: rgba(26, 27, 30, 0.1);
+
+  --hover-row: rgba(26, 27, 30, 0.03);
+  --hover-nav: rgba(26, 27, 30, 0.05);
+
+  --dot-grid: rgba(26, 27, 30, 0.15);
+  --on-accent: var(--dnx-white); /* white on Evolve - 6.3:1 */
+  --state-warn: var(--warn-on-light);
+  --state-danger: var(--danger-on-light);
+  --scrim: rgba(26, 27, 30, 0.22);
+}
+
+/* ---- additions ----
+ * Not in the exported system, needed by screens the system's reference screens
+ * do not contain. Every one of them is derived from a system value rather than
+ * picked.
+ *
+ * The charts are the substantial one. The system publishes a six-hue chart
+ * palette (Evolve, Future, Empower, Trust, a purple, a grey), and Panorama
+ * does not use it, because its series are not six categories: they are spend
+ * against unattributed spend, this period against last, the four token classes.
+ * So a series is separated from its neighbour by *value*, not hue - the accent,
+ * then the accent at reduced opacity, then neutral fills stepping up from the
+ * rule ramp. The unattributed share is deliberately the neutral one, because it
+ * is an absence and should not read as a category. This is also what the grey
+ * ground buys: on a blue field the dim end of an accent ramp and the ground are
+ * the same colour, and the series nearest zero disappears into it. */
+:root {
+  --series-accent-dim: rgba(var(--accent-rgb), 0.45);
+  --series-accent-dimmer: rgba(var(--accent-rgb), 0.3);
+  --series-neutral: rgba(255, 255, 255, 0.16);
+  --series-neutral-3: rgba(255, 255, 255, 0.34);
+  --track-fill: var(--surface-control);
+
+  --tint-warn: rgba(255, 173, 109, 0.14);
+  --tint-danger: rgba(240, 138, 147, 0.14);
+}
+
+[data-theme='light'] {
+  --series-neutral: rgba(26, 27, 30, 0.16);
+  --series-neutral-3: rgba(26, 27, 30, 0.38);
+  --tint-warn: rgba(138, 90, 23, 0.12);
+  --tint-danger: rgba(176, 30, 49, 0.1);
+}
+
+/* ==================================================== tokens/typography.css */
+
+:root {
+  /* TWO VOICES, AND WHICH ONE A WORD IS SET IN IS THE SYSTEM'S STRONGEST
+     SIGNAL. Anything that labels, classifies or measures is `--font-mono`,
+     uppercase, widely tracked. Anything a person reads as language is
+     `--font-ui`, in sentence case. Getting that backwards is the single most
+     visible way to stop looking like DNX.
+
+     `--font-mono` IS QUESTRIAL, AND IT IS NOT A MONOSPACE. The token keeps the
+     name because renaming it would touch every rule in the system to say
+     nothing new. Questrial is the system's `--font-heading` and
+     `--font-brand`: the web substitute for Stolzl Book, which is the canonical
+     DNX typeface and is licensed rather than embeddable. It carries the
+     structural voice here for the same reason Stolzl carries it on a DNX
+     billboard - it is the face the company is set in.
+
+     ONE WEIGHT, AND THE CONSOLE ASKS FOR NO OTHER. Questrial ships a single
+     400 cut and no other exists to ask for; a rule setting 600 on structural
+     text gets a synthesised smear, which at 10px uppercase is a smudge rather
+     than emphasis. So nothing in `styles.css` sets a weight on `--font-mono`
+     text, and the size, the case and the fill do the emphasis. The system's
+     `--weight-semibold: 600` for uppercase labels applies to its Lexend labels,
+     not to this face.
+
+     STOLZL IS NAMED NOWHERE IN THIS STACK, DELIBERATELY. Questrial is the
+     system's substitute for it and is the whole of the answer here - the
+     licensed files are not shipped and the name is not left in the fallback
+     list either, because a stack naming it renders one console for the few
+     people with Stolzl installed locally and a different one for everybody
+     else. A product UI that is not the same for two readers is a bug; the
+     marketing stack, which is not this file, can make the other trade.
+
+     `--font-figure` is Tomorrow and sets every numeral: see below.
+     `--font-code` is the fourth family and is not a voice: see divergence 5. */
+  --font-ui: 'Lexend', system-ui, -apple-system, Arial, sans-serif;
+  /* Lexend runs below regular. It is the only variable face here and the only
+     one with a weight to choose, and 350 is chosen rather than 400 because at
+     this console's sizes - 14px body, 13px sub-lines, a 12px note - Lexend's
+     tall x-height and open counters already give it more presence than its
+     weight suggests, and regular reads heavier beside Questrial's single cut
+     than the hierarchy wants. `--weight-ui-strong` is the one step above it,
+     for the three places that set a heading in the UI face; it moves with the
+     body weight rather than being pinned, so the step stays the same size. */
+  --weight-ui: 350;
+  --weight-ui-strong: 550;
+  --font-mono: 'Questrial', Arial, sans-serif;
+  --font-figure: 'Tomorrow', 'Questrial', Arial, sans-serif;
+  --weight-figure: 300;
+  --font-code: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* `--font-figure` IS TOMORROW, AND IT IS THE ONE FAMILY THE SYSTEM DOES NOT
+     NAME. A square techno grotesque whose digits read as a readout - a meter,
+     a scoreboard, an instrument - which is what a gateway's figures are. It is
+     carried because neither brand face does that job: Questrial sets the words
+     around a number and Tomorrow sets the number, so a measurement is tellable
+     from a label before either is read.
+
+     IT IS SCOPED BY SIZE TOKEN RATHER THAN BY JUDGEMENT. Deciding case by case
+     which numbers have earned a display face ("$18k" does, "12 of 40" does
+     not) is a rule nobody applies twice the same way, so there is no such
+     rule: `--size-mono-fig*`, `--size-figure*`, `--size-stat` and `--size-hero`
+     are the figure sizes and they carry this face; `--size-mono-data` is the
+     identifier size - an email, a slug, a group name, a work-item key - and it
+     stays `--font-mono`.
+
+     BOTH NUMERIC FACES HAVE PROPORTIONAL DIGITS AND NEITHER SHIPS `tnum`. A
+     Tomorrow `1` is 424 units against an `8` at 677, and Questrial is no
+     better, so a column of figures does not align digit-to-digit and a number
+     changes width as its value changes. Every numeric column in the console is
+     right-aligned, which is what keeps a table readable anyway;
+     `font-variant-numeric: tabular-nums` would be a no-op and is set nowhere.
+
+     ONE WEIGHT, AND IT IS LIGHT. Tomorrow ships nine cuts and the choice runs
+     one way: heavier closes the counters on its digits, and a 0 that reads as
+     an 8 at 52px defeats the only thing a figure that size is for. Light opens
+     them, which is what a 52px figure wants - the size is already the emphasis,
+     so the strokes need not be. `--weight-figure` is the number and is 300;
+     `fonts.css` declares the face at 300 alone, so asking for anything else
+     gets a synthesised smear rather than a cut that does exist. The small end
+     was checked rather than assumed: an 11px cell holds, because every figure
+     is `--text-primary` and the colour is doing the contrast work. */
+
+  /* THE SCALE IS WHOLE PIXELS, AND IT IS THE CONSOLE'S - see divergence 6. */
+
+  /* display / readout */
+  --size-hero: 52px; /* the one figure a screen is about */
+  --size-stat: var(--size-hero);
+  --size-wordmark: 20px;
+  --size-readout: 13px;
+
+  /* UI text */
+  --size-page-title: 26px;
+  --size-section-lg: 19px; /* a tab's primary heading */
+  --size-name: 14px;
+  --size-body: 14px;
+  --size-sub: 13px; /* the line under a section heading, and prose */
+  --size-note: 12px; /* a footnote, and the line under a figure */
+
+  /* structural labels - the system's voice */
+  --size-label: 10px;
+  --size-label-sm: 10px;
+  --size-micro: 10px;
+  --size-mono-data: 11px;
+
+  /* figures. A figure in a table cell, a figure in a header pair, and a figure
+     in the chart tooltip: three sizes and no more. */
+  --size-mono-fig: 13px;
+  --size-mono-fig-md: 15px;
+  --size-mono-fig-lg: 17px;
+
+  /* tracking.
+     Questrial is a wide face - a geometric with open counters and generous
+     sidebearings - so the whole ramp is tracked tighter than a narrow face
+     would need. The system's own label tracking is 0.1em and its wordmark tag
+     is 0.18em; those are the two ends, and the steps between them are the
+     console's. Tracked
+     further, 10px uppercase Questrial stops reading as a word and starts
+     reading as separated letters. */
+  --track-micro: 0.14em;
+  --track-title: 0.12em;
+  --track-column: 0.1em; /* the system's own label tracking */
+  --track-nav: 0.1em;
+  --track-tab: 0.1em;
+  --track-wordmark: 0.18em; /* the system's "EXPERIENCE" tag tracking, verbatim */
+  --track-hero: -0.01em; /* the system's --tracking-display */
+  --track-page-title: -0.01em; /* the system's --tracking-heading */
+
+  /* leading. The system runs body at 1.7 against a 560px measure; this console
+     sets 14px body into table cells and two-column bands, where 1.7 opens rows
+     the screens have no room for. 1.6 is the compromise. */
+  --leading-tight: 1.25; /* the system's --leading-heading */
+  --leading-body: 1.6;
+  --leading-stat: 1.08; /* the system's --leading-display */
+
+  /* ---- additions ---- */
+  /* A panel title, and a band's section heading - the same thing at two
+     scales apart, so one token. */
+  --size-title: 15px;
+  /* A figure that is not the headline one. */
+  --size-figure: 26px;
+  --size-figure-lg: 34px;
+  /* Data set at reading size: a shell command, a model id, a rendered config.
+     The one place `--font-code` is spent. */
+  --size-code: 12.5px;
+  --track-data: 0.04em;
+  --track-code: 0.04em;
+  --leading-code: 1.75;
+}
+
+/* ======================================================= tokens/spacing.css */
+
+/* The spacing scale is the console's own: the system's is a 4px base and so
+   is this, and the layout figures below (the
+   sidebar, the row height, the band paddings) are density decisions the brand
+   has no opinion about. The system's `--layout-max: 1280px` and
+   `--layout-gutter` are deliberately absent - they describe a centred marketing
+   column, and a screen here is a stack of full-bleed bands. */
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 22px;
+  --space-6: 28px;
+  --space-7: 34px;
+  --space-8: 38px;
+  --space-9: 44px;
+
+  --page-pad-x: 56px;
+  --page-pad-top: 40px;
+  --section-gap: 38px;
+  --band-gap: 22px;
+
+  --sidebar-w: 228px;
+  --chrome-h: 64px;
+  --drawer-w: 420px;
+  --modal-w: 520px;
+
+  --row-h: 67px;
+  --row-pad-y: 17px;
+  --row-pad-y-dense: 11px;
+  --table-head-h: 44px;
+  --control-h: 34px;
+  --control-h-sm: 28px;
+  --button-h: 32px;
+
+  /* ---- additions ---- */
+  /* A panel is a flat fill with no border and no shadow; this is the padding
+     the system's stat blocks and flag cells carry. */
+  --panel-pad: 16px 18px 18px;
+  --panel-pad-tight: 14px 18px;
+  /* Bar heights. The console's language for "how much" is the horizontal bar,
+     and it appears at three weights: under a row, in a list, under a budget. */
+  --bar-h: 4px;
+  --bar-h-md: 6px;
+  --bar-h-lg: 8px;
+  /* The system's drawer is 420px because it shows a record. Panorama's
+     shows a form - a route with its model, stance and conditions - and a
+     form does not narrow the way a record does. Same sheet, one width wider. */
+  --drawer-w-form: 560px;
+
+  /* ---- the band ----
+   * A screen is a stack of full-bleed bands separated by hairlines, not a grid
+   * of cards on a padded page. Each band answers one question and carries its
+   * own padding out to the page edge, which is why these are paddings rather
+   * than a gap: there is no gutter between two bands, there is a rule.
+   *
+   * The handoff draws ten bands whose top padding varies between 40 and 46 and
+   * whose bottom varies between 34 and 54. Those differences are drafting
+   * noise rather than design - nothing in the screens depends on a 2px step -
+   * so they are normalised here to three variants on the 4px rhythm. */
+  --band-pad-y: 44px;
+  --band-pad-y-end: 48px; /* the last band before a footnote needs the room */
+  --band-pad-y-tight: 34px; /* a band that is only a row of figures */
+  /* A two-column band splits at the page's own padding and keeps a rule
+     between the cells, so each cell's inner edge is half the gutter. */
+  --cell-gutter: 48px;
+
+  /* A table row, and the header above it. Both are on the same grid, and the
+     header is a fill rather than a rule - see styles.css. */
+  --table-head-pad: 9px 12px;
+  --row-pad: 15px 12px;
+  /* The bar under a row's name: thinner than any Track, because it measures a
+     row against the table rather than a value against a limit. */
+  --bar-h-row: 3px;
+  /* The roster's row: an avatar over a name over an address, at 14px of
+     padding either side. Fixed rather than derived, because the list is
+     virtualised and the scrollbar is drawn from this number - ROW_HEIGHT in
+     People.tsx is the same figure, and there is a comment on each saying so. */
+  --roster-row-h: 62px;
+}
+
+/* ======================================================= tokens/borders.css */
+
+/* THE SYSTEM IS FLAT BUT IT IS NOT SQUARE, and the corners are visible on
+ * every screen. The guidelines state it twice: base radius 10px, and
+ * "buttons/chips/switches are pill (100px). Never square buttons."
+ *
+ * Flat is the half that matters more: no gradients, no
+ * decorative effects, and shadows only on a layer that genuinely floats over
+ * the page. A panel is still a fill and a hairline. */
+
+:root {
+  --radius: 10px; /* the system's base card/control radius */
+  --radius-sm: 6px;
+  --radius-tag: 30px; /* a status tag */
+  --radius-pill: 100px; /* a button, a chip, a switch */
+  --radius-sharp: 0; /* a full-bleed band edge */
+  --hairline: 1px;
+  --border-hairline: 1px solid var(--rule);
+  --border-rule-strong: 1px solid var(--rule-strong);
+  --border-control: 1px solid var(--rule-control);
+  --border-divider: 1px solid var(--rule-divider);
+  /* The system's `--shadow-lg` is written for paper. A sheet over the dark
+     ground needs to be deeper than one over paper or it reads as a panel
+     rather than as a layer above one. */
+  --shadow-sheet: 0 24px 70px rgba(10, 10, 20, 0.55);
+  --dot-pitch: 22px;
+}
+
+[data-theme='light'] {
+  --shadow-sheet: 0 12px 32px rgba(37, 37, 62, 0.14); /* the system's --shadow-lg */
+}
+
+/* ======================================================== tokens/motion.css */
+
+/* The curves are the system's and the durations are the console's. The system
+ * publishes `--dur-fast: 200ms` and `--dur-base: 300ms`, which are drawn for
+ * marketing sections settling into place on scroll; a table row that takes
+ * 300ms to acknowledge a hover reads as lag in a tool somebody is working in.
+ * The easings are where the system's motion character actually lives, and those
+ * are taken verbatim. */
+
+:root {
+  --dur-fast: 0.15s;
+  --dur: 0.2s;
+  --dur-pulse: 2.6s;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1); /* the system's --ease-out-quart */
+  /* The system cross-fades its theme scopes over 500ms, and this console has a
+     theme switch in the sidebar. Long on purpose: every colour on the screen
+     changes at once, and at 200ms that reads as a flash rather than a change. */
+  --dur-theme: 0.5s;
+
+  /* ---- additions ----
+   * Sparing and mechanical, at the system's own durations. Nothing bounces,
+   * nothing springs, nothing animates on scroll. The system's `--ease-bounce`
+   * exists for the marketing button lift and is deliberately not carried over. */
+  --dur-enter: 0.2s; /* a block settling into place at mount */
+  --stagger: 28ms; /* between one block and the next */
+  --dur-toggle: 0.18s;
+  --dur-bar: 0.5s; /* a chart bar reaching its height */
+  --dur-fill: 0.6s; /* a progress bar reaching its width */
+  --dur-sweep: 0.75s; /* the indeterminate sweep under a pending button */
+  --dur-check: 0.4s; /* the check mark drawing itself */
+
+  /* An overlay leaving, and the curve it leaves on.
+   *
+   * Shorter than any entrance in the set, because a dismissal is a thing the
+   * reader has already decided: the panel is in the way from the moment they
+   * pressed Escape, and matching the 0.2s arrival would make it linger through
+   * a decision that is over.
+   *
+   * `--ease-in` is the only accelerating curve here and exists solely for
+   * departures. Running an entrance curve backwards decelerates on the way
+   * out, which reads as the panel being drawn off reluctantly; a dismissal
+   * should start slow and be gone. Nothing arrives on this curve. */
+  --dur-exit: 0.14s;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* How long the console waits before admitting it is waiting.
+   *
+   * Every skeleton and the shell's own wait line are held invisible for this
+   * long and then fade in, so a response that lands inside it is never
+   * preceded by a flash of loading furniture. Against a local SQLite
+   * deployment most of them land in single digits, which is the same
+   * observation `PENDING_MIN` in ui.tsx is built on - the difference is which
+   * way it points. A button that resolves instantly needs its pending state
+   * *held* to be legible; a table that resolves instantly needs its skeleton
+   * never shown at all, because the skeleton is furniture rather than an
+   * answer and 40ms of it is a flicker in the page.
+   *
+   * Deliberately below the ~200ms at which a wait becomes perceptible: this
+   * hides flashes, and never delays an answer the reader is owed. */
+  --delay-wait: 120ms;
+}
+
+/* The status dot in the chrome. 2.6s, and the only thing on a screen that
+   repeats. */
+@keyframes pn-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* Terminal cursor in the quota-block and setup mockups. */
+@keyframes pn-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Motion is decorative here; none of it conveys state on its own. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

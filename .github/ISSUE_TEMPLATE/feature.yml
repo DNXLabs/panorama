@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: Feature request
+description: Something Panorama should do and does not.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the README's Principles first. A request that changes one of them
+        (bodies are never stored, a developer sees only their own numbers,
+        unattributed spend is always visible, streaming is never buffered) needs
+        a decision in an issue before any pull request, and is unlikely to be
+        accepted.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, who in your organization needs it, and what you do today instead.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Optional. How you imagine it working.

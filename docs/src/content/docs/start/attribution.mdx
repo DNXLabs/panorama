@@ -1,0 +1,125 @@
+---
+title: How attribution works
+description: >-
+  How a request gets tied to a branch, ticket or pull request with nothing
+  configured on the client, what each coding tool gives you, and how to read
+  the part that could not be attributed.
+sidebar:
+  order: 4
+---
+
+import ThemeImage from '../../../components/ThemeImage.astro';
+import analyticsWorkDark from '../../../assets/console/analytics-work-dark.webp';
+import analyticsWorkLight from '../../../assets/console/analytics-work-light.webp';
+import analyticsAttributionDark from '../../../assets/console/analytics-attribution-dark.webp';
+import analyticsAttributionLight from '../../../assets/console/analytics-attribution-light.webp';
+
+
+Panorama ties every request to a **work item**: a branch, a pull request or a
+ticket. That is what turns "we spent $4,200 on AI this month" into "PAY-1183
+cost $18.40, and it merged".
+
+Nothing is installed or configured on the engineer's machine for this. A coding
+tool already sends its working context with every request, and Panorama reads
+it on the way past.
+
+<ThemeImage
+  frame
+  dark={analyticsWorkDark}
+  light={analyticsWorkLight}
+  alt="Analytics, Work tab. A table of work items, each with its ticket key, title, how it was identified, its status such as merged or in progress, and what it cost."
+  caption="Spend grouped by the ticket or branch it paid for, with whether the work merged."
+/>
+
+## Where the answer comes from
+
+There are four sources, tried in this order. A higher one always wins.
+
+| Source | What it is | Confidence |
+| --- | --- | --- |
+| **Stamp** | Headers the client sends on purpose, naming the repository, branch, ticket or pull request. | Exact |
+| **Structural** | Read from the shape of the request: the tool's environment block, `git` and `gh` output in tool results, file paths, remotes. | High |
+| **Content** | A ticket or pull request key mentioned in the conversation. Used only when the session backs it up. | Low |
+| **Unattributed** | Nothing could be found. | Shown as such |
+
+The source is recorded with every attribution and shown beside it, for example
+"PAY-1183, from the branch name (structural, high)".
+
+**Attribution is decided once per session and inherited by every request in
+it.** It is not re-guessed per request. If better evidence turns up later in
+the session, the whole session moves to the better answer.
+
+**opencode and Claude Code name their own sessions.** Each sends a session id
+with every request, so their turns are grouped exactly rather than inferred.
+opencode's subagents are grouped with the conversation that started them, and
+Claude Code's background calls to its fast model, which carry no repository of
+their own, are grouped with the conversation they were made for.
+
+**A branch name carries the ticket.** A branch called `feat/PAY-1183-refunds`
+is attributed to ticket `PAY-1183` from the name alone. No tracker integration
+is needed for that.
+
+## What each tool gives you
+
+| Tool | Reaches | Why |
+| --- | --- | --- |
+| Claude Code | Branch and ticket | Its environment block includes the current branch. |
+| opencode | Repository only | It sends its working directory and no branch. |
+| Codex CLI | Not measured yet | It is attributed by the same rules, and the end-to-end tests do not cover it yet. |
+
+Both of the first two rows are checked by the end-to-end test suite against the
+real tools, so a tool changing what it sends shows up as a failing test.
+
+To get exact attribution from Claude Code, add the optional stamping step on
+**My setup**. It sets `ANTHROPIC_CUSTOM_HEADERS` from your git checkout. See
+[Claude Code](/docs/engineers/claude-code/#optional-exact-attribution).
+
+## Reading the gap
+
+<ThemeImage
+  frame
+  dark={analyticsAttributionDark}
+  light={analyticsAttributionLight}
+  alt="Analytics, Attribution tab. Attributed and unattributed spend, and the unattributed part broken down by reason."
+  caption="The gap, broken down. The three reasons add up to the unattributed figure exactly."
+/>
+
+Some spend cannot be attributed, and Panorama says how much and why. On
+**Analytics → Attribution**, every unattributed request falls into exactly one
+of three reasons:
+
+- no repository was open,
+- a repository was open and there was no branch,
+- there was a branch, and its name matched no work item.
+
+The three add up to the unattributed total exactly. Exploratory sessions outside
+a repository are the usual cause, and that is normal.
+
+If the gap is large:
+
+- **Check which tools people use.** opencode traffic stops at the repository.
+- **Check your branch naming.** A ticket key in the branch name is what links
+  a branch to a ticket. If your keys do not look like `ABC-123`, set
+  `attribution.ticket_pattern` in the
+  [configuration file](/docs/reference/configuration/).
+- **Consider stamping** for pipelines and other traffic that has no checkout.
+
+## Confirmation against GitHub
+
+The GitHub integration is experimental: it has not yet been tested against a
+real GitHub organization.
+
+Once [GitHub is connected](/docs/configure/integrations/), Panorama asks it
+about the branches and pull requests it has already seen in traffic, and about
+nothing else. That adds titles, authors and whether the work merged, which is
+what cost per merged pull request is built from.
+
+Confirmation never changes an attribution. A branch GitHub has never heard of
+may simply not have been pushed yet.
+
+## Related
+
+- [Cost centers](/docs/configure/cost-centers/) allocate attributed spend to an
+  accounting line.
+- [Reading request bodies](/docs/internals/extraction/) covers how the
+  extractors work and what they had to learn.

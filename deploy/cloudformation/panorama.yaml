@@ -1,0 +1,1088 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Panorama - an AI gateway that connects coding-AI spend to real work.
+  Fargate behind an Application Load Balancer, against Aurora Serverless v2,
+  in a VPC you already have.
+
+# ---------------------------------------------------------------------------
+# This template is the deployable artifact, not a synthesis step. A customer's
+# security team can read it before it runs, it needs no bootstrap stack and no
+# toolchain on the deploying machine, and it is versioned per release beside
+# the image it deploys.
+#
+# The VPC is an input. Panorama does not create one, because the account this
+# lands in already has a network, a routing posture and a set of opinions about
+# both, and a deployment that builds its own is either ignored or fought with.
+#
+# What it does NOT create, and why:
+#
+#   - VPC endpoints. Whether you need them is a property of your network, not
+#     of this product: with a NAT gateway you need none, without one you need
+#     six, and a seventh once the bedrock-mantle provider is enabled. The README
+#     lists them. What matters here is only that the tasks can
+#     reach Bedrock, ECR, Secrets Manager, CloudWatch Logs and the Pricing API
+#     by some route.
+#   - A hosted zone. An optional record is created in one you name.
+#   - A migration runner. Migrations are an ordered step an operator takes
+#     before the service rolls, which is the whole reason the rolling update is
+#     safe; see the README.
+# ---------------------------------------------------------------------------
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: Network }
+        Parameters:
+          - VpcId
+          - ServiceSubnetIds
+          - LoadBalancerSubnetIds
+          - AssignPublicIp
+          - LoadBalancerScheme
+          - IngressCidr
+      - Label: { default: Naming and TLS }
+        Parameters:
+          - DomainName
+          - CertificateArn
+          - HostedZoneId
+      - Label: { default: Image }
+        Parameters:
+          - ImageTag
+          - ImageRepository
+      - Label: { default: Service }
+        Parameters:
+          - DesiredCount
+          - TaskCpu
+          - TaskMemory
+          - TaskCpuArchitecture
+          - AutoMigrate
+          - LogRetentionDays
+      - Label: { default: Database }
+        Parameters:
+          - DatabaseMinCapacity
+          - DatabaseMaxCapacity
+          - DatabaseEngineVersion
+          - DatabaseDeletionProtection
+          - DatabaseSnapshotIdentifier
+      - Label: { default: Bedrock }
+        Parameters:
+          - BedrockRegion
+      - Label: { default: Encryption key (optional) }
+        Parameters:
+          - EncryptionKeySecretArn
+      - Label: { default: Single sign-on (optional) }
+        Parameters:
+          - OidcAllowedDomains
+      - Label: { default: Web search (optional) }
+        Parameters:
+          - CreateWebSearchGateway
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC the load balancer, tasks and database run in.
+
+  ServiceSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >-
+      Subnets for the Fargate tasks and the database, in at least two
+      availability zones. Private subnets with a NAT gateway is the intended
+      shape; public subnets work if you also set AssignPublicIp to ENABLED.
+
+  LoadBalancerSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >-
+      Subnets for the load balancer, in at least two availability zones. Public
+      subnets for an internet-facing load balancer; the same private subnets as
+      the service for an internal one.
+
+  AssignPublicIp:
+    Type: String
+    Default: DISABLED
+    AllowedValues: [ENABLED, DISABLED]
+    Description: >-
+      ENABLED gives each task a public IP, which is how a task in a public
+      subnet reaches ECR, Bedrock and Secrets Manager without a NAT gateway.
+      Leave DISABLED for private subnets with a NAT gateway or VPC endpoints.
+
+  LoadBalancerScheme:
+    Type: String
+    Default: internet-facing
+    AllowedValues: [internet-facing, internal]
+    Description: >-
+      internal keeps the console and the gateway reachable only from inside the
+      VPC and whatever is peered to it.
+
+  IngressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
+    Description: >-
+      Who may reach the load balancer. Narrow it to your office and VPN ranges
+      if you can - every credential this product issues is bearer-shaped.
+
+  DomainName:
+    Type: String
+    AllowedPattern: ^[a-zA-Z0-9.-]+$
+    Description: >-
+      The hostname this deployment answers on, e.g. panorama.example.com. It
+      becomes server.base_url, which is the OIDC redirect URI and the endpoint
+      printed in every client setup instruction, so it must match what coding
+      tools actually dial.
+
+  CertificateArn:
+    Type: String
+    AllowedPattern: ^arn:aws[a-zA-Z-]*:acm:.+$
+    Description: >-
+      ACM certificate for DomainName, in this region.
+
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional. A Route 53 hosted zone to create the alias record in. Leave
+      empty to point DomainName at the load balancer yourself.
+
+  ImageTag:
+    Type: String
+    Default: ""
+    AllowedPattern: ^(|sha256:[0-9a-f]{64}|[A-Za-z0-9_][A-Za-z0-9._-]{0,127})$
+    Description: >-
+      What to run. Empty, a channel, a version, or a digest - they are all
+      just names for an image in the same repository, which is why this is
+      one parameter rather than three.
+      Empty is the default and means the version this template was released
+      with, so deploying a newer release's template moves the image with it;
+      in the repository's copy, which belongs to no release, empty means
+      stable. stable is the latest release. beta is the latest prerelease, and is
+      empty until one is published. A version tag such as
+      v0.1.3 is never overwritten by a release, so pinning one is a stable
+      reference. sha256:... pins the exact bytes
+      and is the strongest form, because it survives a mirror, a retag and a
+      repository policy change; the digest of each release is published as
+      image.json on its GitHub release.
+      A channel is a moving tag resolved once, when this stack is created or
+      updated - never by ECS at task start, which is why a deploy that only
+      moves a channel changes nothing.
+
+  ImageRepository:
+    Type: String
+    Default: public.ecr.aws/dnxsolutions/panorama
+    AllowedPattern: ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9._-]+)+$
+    Description: >-
+      The image repository, without a tag. The default is the public
+      repository every release is pushed to, which needs no credentials and
+      no access granted to your account. To pull from a mirror or a
+      pull-through cache in your own account, name it here, e.g.
+      123456789012.dkr.ecr.eu-west-1.amazonaws.com/panorama - which is also
+      how a private subnet with no NAT gateway pulls at all, since ECR Public
+      has no VPC endpoint. See the README.
+
+  DesiredCount:
+    Type: Number
+    Default: 2
+    MinValue: 0
+    Description: >-
+      How many tasks to run. Set this to 0 for the first deploy, run the
+      migration task, then set it back - see the README. Two is the smallest
+      count that survives an availability zone.
+
+  TaskCpu:
+    Type: String
+    Default: "512"
+    AllowedValues: ["256", "512", "1024", "2048", "4096"]
+    Description: >-
+      Task CPU units. 512 is 0.5 vCPU, which is the floor worth starting at:
+      server.max_request_bytes is 32 MiB and a coding-agent request body is
+      held in memory while the extractors read it.
+
+  TaskMemory:
+    Type: String
+    Default: "1024"
+    Description: >-
+      Task memory in MiB. Must be a combination Fargate allows for TaskCpu.
+
+  TaskCpuArchitecture:
+    Type: String
+    Default: ARM64
+    AllowedValues: [ARM64, X86_64]
+    Description: >-
+      The binary is CGO-free and builds for both, and ARM64 Fargate is
+      meaningfully cheaper for identical work. This has to match the image you
+      are pulling: a task whose architecture the image does not carry fails to
+      start with an exec format error, which looks like a corrupt image.
+
+  AutoMigrate:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Run pending migrations at task startup. Leave false. The migration
+      provider takes no session lock, so several tasks starting at once is an
+      unguarded race; true is safe only where DesiredCount is 1, which is an
+      evaluation deployment and not this one.
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+
+  DatabaseMinCapacity:
+    Type: Number
+    Default: 0.5
+    Description: >-
+      Aurora Serverless v2 minimum capacity units. 0.5 is the smallest that
+      stays warm; 0 lets the cluster pause, which a gateway holding a
+      connection pool will never actually reach.
+
+  DatabaseMaxCapacity:
+    Type: Number
+    Default: 4
+    Description: Aurora Serverless v2 maximum capacity units.
+
+  DatabaseEngineVersion:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional. Aurora PostgreSQL version, e.g. 16.6. Left empty, RDS picks the
+      default for the region, which is what keeps a first deploy from failing
+      ten minutes in on a version that region does not carry. Pin it once you
+      know: aws rds describe-db-engine-versions --engine aurora-postgresql
+
+  DatabaseDeletionProtection:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Set true for production. The cluster also has a Snapshot deletion policy,
+      so deleting the stack keeps the data either way.
+
+  DatabaseSnapshotIdentifier:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional. A cluster snapshot to create the database from, by ARN or by
+      name in this region, for moving a deployment to another region or
+      account. Copy the snapshot here first, and pass the old deployment's key
+      as EncryptionKeySecretArn, or stored integration credentials cannot be
+      read. Leave it set for the life of the stack: changing or clearing it
+      replaces the database.
+
+  BedrockRegion:
+    Type: String
+    Default: us-east-1
+    Description: >-
+      The region the bedrock provider starts in. Read on the first start
+      only - from then on each provider's region, bedrock-mantle included, is
+      set in the console under Settings, Model providers, and the task role
+      already allows both in every region. Which models engineers may ask for
+      is not set here either; it is a set of routes chosen in the console.
+
+  EncryptionKeySecretArn:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional. An existing secret holding the encryption key. Leave empty and
+      one is generated. It must be byte-identical on every task and stable for
+      the life of the deployment: changing it does not fail, it makes every
+      stored integration credential unreadable at the next confirmation pass.
+      Keep a copy outside this account.
+
+  # A parameter, where the rest of the connection is one secret, and the comment
+  # on that secret says why a connection should not be split across two places.
+  # It is split here because the secret's value is written once, at create, so
+  # a key added to it later is absent from every stack that already exists, and
+  # ECS refuses to start a task that references a JSON key a secret does not
+  # have. A domain name is also not a secret.
+  OidcAllowedDomains:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[A-Za-z0-9.-]+(,[A-Za-z0-9.-]+)*$"
+    ConstraintDescription: Bare domains separated by commas, like example.com,example.org.
+    Description: >-
+      Optional, and required when the identity provider is Google. Limits
+      sign-in to accounts in these domains. Google's issuer signs in every
+      Google account there is and the first account to sign in owns the
+      deployment, so Panorama refuses to start on that issuer without this.
+      Leave empty for a provider whose issuer names your own tenant (Entra ID,
+      Okta, Keycloak, Cognito, Auth0, PingOne).
+
+  CreateWebSearchGateway:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Optional. Set true to create an AgentCore gateway with a Web Search Tool
+      target, which Panorama offers to every coding tool as a web_search MCP
+      tool. Search is on as soon as the service starts; Settings, Web search
+      shows the gateway and its price and lets an administrator switch it off.
+      The Web Search Tool is available in us-east-1, eu-west-1 and
+      ap-northeast-1, and the stack refuses true in any other region.
+
+# The version this template was released with, which is the image an empty
+# ImageTag runs. A mapping rather than the parameter's default because a
+# stack keeps the value a parameter had when it was created: a default of
+# v1.4.0 would be stored as v1.4.0, and the next release's template would
+# leave every stack built from this one on v1.4.0. An empty parameter stays
+# empty, and the mapping comes with whichever template is deployed.
+# deploy/cloudformation/release-template.sh rewrites the one line below, and
+# CI checks that it still can.
+Mappings:
+  Release:
+    Image:
+      Tag: stable
+
+Conditions:
+  # A docker tag may not contain a colon, so splitting on one yields a single
+  # element for a tag and two for a digest. That is the whole of the branch:
+  # with one parameter there is no precedence to get wrong, and every edit to
+  # it changes the rendered template - which the three-parameter version did
+  # not, and reported as "No updates are to be performed".
+  ImageTagIsDigest: !Equals [!Select [0, !Split [":", !Ref ImageTag]], "sha256"]
+  ImageTagIsReleased: !Equals [!Ref ImageTag, ""]
+  HasHostedZone: !Not [!Equals [!Ref HostedZoneId, ""]]
+  HasEngineVersion: !Not [!Equals [!Ref DatabaseEngineVersion, ""]]
+  GenerateEncryptionKey: !Equals [!Ref EncryptionKeySecretArn, ""]
+  WithWebSearchGateway: !Equals [!Ref CreateWebSearchGateway, "true"]
+  RestoreDatabase: !Not [!Equals [!Ref DatabaseSnapshotIdentifier, ""]]
+
+# Refused before anything is created. Elsewhere AgentCore answers "Connector
+# integration web-search is not available for this account", which names the
+# account, after the gateway and its role already exist.
+Rules:
+  WebSearchRegion:
+    RuleCondition: !Equals [!Ref CreateWebSearchGateway, "true"]
+    Assertions:
+      - Assert: !Contains [["us-east-1", "eu-west-1", "ap-northeast-1"], !Ref "AWS::Region"]
+        AssertDescription: >-
+          The AgentCore Web Search Tool is available in us-east-1, eu-west-1
+          and ap-northeast-1 only. Set CreateWebSearchGateway to false here.
+
+Resources:
+  # ------------------------------------------------------------- networking
+  #
+  # Three security groups rather than one, so each hop is stated: who may reach
+  # the load balancer, who may reach a task, who may reach the database. A
+  # single group with a self-reference says none of that.
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${AWS::StackName} load balancer"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - Description: HTTPS from the permitted range
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref IngressCidr
+        - Description: HTTP, redirected to HTTPS
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref IngressCidr
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-alb"
+
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${AWS::StackName} tasks"
+      VpcId: !Ref VpcId
+      # Egress is open because a task calls Bedrock, ECR, Secrets Manager,
+      # CloudWatch Logs, the Pricing API and - once somebody connects it -
+      # GitHub. Narrowing it means naming prefix lists or endpoint groups,
+      # which is a property of your network rather than of this stack.
+      SecurityGroupEgress:
+        - Description: Outbound to AWS APIs and connected integrations
+          IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-service"
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${AWS::StackName} database"
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-db"
+
+  LoadBalancerToService:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LoadBalancerSecurityGroup
+      Description: To the tasks
+      IpProtocol: tcp
+      FromPort: 8088
+      ToPort: 8088
+      DestinationSecurityGroupId: !Ref ServiceSecurityGroup
+
+  ServiceFromLoadBalancer:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ServiceSecurityGroup
+      Description: From the load balancer
+      IpProtocol: tcp
+      FromPort: 8088
+      ToPort: 8088
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+
+  DatabaseFromService:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      Description: From the tasks
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref ServiceSecurityGroup
+
+  # ---------------------------------------------------------------- secrets
+
+  # Generated here rather than by RDS managed rotation, deliberately. A managed
+  # master password rotates every seven days, and a task holds its password in
+  # an environment variable read once at start - so a rotation nobody asked for
+  # would break every new database connection until the service was redeployed.
+  # Rotation is therefore an operator action with a known second step, not a
+  # schedule that fires at 3am. The discrete database fields are what make
+  # turning managed rotation on later a configuration change rather than a code
+  # change; see the README.
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: !Sub "${AWS::StackName} database credentials"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"panorama"}'
+        GenerateStringKey: password
+        PasswordLength: 40
+        # RDS refuses these four in a master password, whatever the URL
+        # escaping downstream can cope with.
+        ExcludeCharacters: '"@/\ '
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-db"
+
+  # Fills host, port, dbname and engine into the secret once the cluster
+  # exists, so anything else in the account reading it gets the whole story.
+  # Panorama itself takes the host from an environment variable - it is not a
+  # secret, and making it one would mean a task restart to follow a failover.
+  DatabaseSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DatabaseSecret
+      TargetId: !Ref DatabaseCluster
+      TargetType: AWS::RDS::DBCluster
+
+  # A passphrase, not a key: internal/secrets derives the AES-GCM key from
+  # anything sixteen characters or longer with HKDF. Punctuation is excluded
+  # only so that an operator can copy it out of the console without quoting
+  # trouble - 48 alphanumerics is ~285 bits.
+  EncryptionKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: GenerateEncryptionKey
+    Properties:
+      Description: !Sub "${AWS::StackName} integration credential encryption key"
+      GenerateSecretString:
+        PasswordLength: 48
+        ExcludePunctuation: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-encryption-key"
+
+  # The single sign-on connection, created empty and edited by hand.
+  #
+  # Every field is a deliberate blank rather than a placeholder, because a
+  # placeholder here does not survive contact with the app. Configured() is
+  # `issuer != ""`, and once an issuer is set validation demands https, a client
+  # id and a client secret - so `REPLACE_ME` fails validation and the task never
+  # starts, while a plausible `https://replace-me.invalid` passes and leaves the
+  # console advertising a sign-in button that dead-ends at discovery. Empty is
+  # the only value that is true until somebody fills it in.
+  #
+  # Blank also costs nothing at the far end: an environment variable set to the
+  # empty string is treated as absent by config.lookup, so scopes and
+  # groups_claim fall through to the defaults compiled into the binary and only
+  # need filling in for a provider that differs.
+  #
+  # Written once, at create. CloudFormation reissues SecretString only when the
+  # template's own literal changes, and this one does not - so an operator's
+  # edits are not reverted by the next stack update. Do not edit the literal.
+  OidcSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: !Sub "${AWS::StackName} single sign-on connection - fill these in, then force a new deployment"
+      SecretString: |-
+        {"issuer":"","client_id":"","client_secret":"","scopes":"","groups_claim":""}
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-oidc"
+
+  # ---------------------------------------------------------------- database
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${AWS::StackName}"
+      SubnetIds: !Ref ServiceSubnetIds
+
+  DatabaseCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: !If [HasEngineVersion, !Ref DatabaseEngineVersion, !Ref "AWS::NoValue"]
+      SnapshotIdentifier: !If [RestoreDatabase, !Ref DatabaseSnapshotIdentifier, !Ref "AWS::NoValue"]
+      # A snapshot carries its database and encryption. The user is the same
+      # name it was created with, and the password is set after the restore,
+      # so the restored cluster answers to this stack's secret.
+      DatabaseName: !If [RestoreDatabase, !Ref "AWS::NoValue", panorama]
+      MasterUsername: panorama
+      # A dynamic reference: CloudFormation resolves it at deploy time and
+      # stores the reference, never the value, in the template and its history.
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref DatabaseMinCapacity
+        MaxCapacity: !Ref DatabaseMaxCapacity
+      StorageEncrypted: !If [RestoreDatabase, !Ref "AWS::NoValue", true]
+      BackupRetentionPeriod: 7
+      DeletionProtection: !Ref DatabaseDeletionProtection
+      EnableCloudwatchLogsExports:
+        - postgresql
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref DatabaseCluster
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      PubliclyAccessible: false
+
+  # ---------------------------------------------------------------- roles
+  #
+  # Two roles, and they are not interchangeable. The execution role is ECS
+  # itself - pulling the image and resolving secrets before the container
+  # starts. The task role is the process. Putting Bedrock on the execution role
+  # is the mistake that looks like it works, because the image still pulls.
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Carries the ECR pull actions and the log-stream actions. The
+        # cross-account half of pulling from the DNX registry is not here and
+        # cannot be: ecr:GetAuthorizationToken is account-level, so it always
+        # lives in your role, while the permission to read that repository is a
+        # statement DNX adds on their side naming your account.
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: read-injected-secrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadSecretsForInjection
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !If [GenerateEncryptionKey, !Ref EncryptionKeySecret, !Ref EncryptionKeySecretArn]
+                  - !Ref OidcSecret
+              - Sid: DecryptThoseSecrets
+                Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub "secretsmanager.${AWS::Region}.amazonaws.com"
+
+  # The reference policy. The console and `panorama providers policy` render
+  # the same statements from bedrock.TaskRolePolicy, and a test fails the build
+  # when this and that value disagree - so change both together.
+  #
+  # Both Bedrock endpoints, in every region, with no model condition. Which
+  # region each provider invokes is chosen in the console after this role
+  # exists, and that choice must never need an IAM change.
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: bedrock
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Two ARN shapes because one invocation is checked against both.
+              # Current Anthropic models refuse their bare model id and are
+              # reached through an inference profile, and AWS authorises that
+              # against the profile *and* against the foundation model in every
+              # region the profile may route to. A global. profile's
+              # foundation-model ARN has an empty region field, which the
+              # wildcard matches and a hand-written region does not.
+              - Sid: InvokeThroughInferenceProfiles
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - arn:aws:bedrock:*::foundation-model/*
+                  - arn:aws:bedrock:*:*:inference-profile/*
+              # bedrock-mantle is its own service, and bedrock:InvokeModel does
+              # not authorise it. Every inference call there - Anthropic
+              # Messages, Chat Completions, Responses - is CreateInference,
+              # checked against the project it runs in; the default project is
+              # covered by project/*. Not granted: CallWithBearerToken (the
+              # gateway signs with SigV4), retention and project administration,
+              # files and fine-tuning.
+              - Sid: InvokeThroughBedrockMantle
+                Effect: Allow
+                Action:
+                  - bedrock-mantle:CreateInference
+                  - bedrock-mantle:CountTokens
+                Resource:
+                  - arn:aws:bedrock-mantle:*:*:project/*
+              - Sid: DiscoverAndPriceModels
+                Effect: Allow
+                Action:
+                  - bedrock:ListFoundationModels
+                  - bedrock:ListInferenceProfiles
+                  - bedrock-mantle:ListModels
+                  - bedrock-mantle:GetModel
+                  - pricing:GetProducts
+                Resource: "*"
+              # The statement people leave out, because nothing about it says
+              # Bedrock. Bedrock subscribes the account to a foundation model on
+              # its first invocation, so without this the first request against
+              # a model this account has never used fails as AccessDenied - the
+              # same error a missing InvokeModel gives. It cannot be scoped.
+              - Sid: SubscribeOnFirstInvocation
+                Effect: Allow
+                Action:
+                  - aws-marketplace:Subscribe
+                  - aws-marketplace:ViewSubscriptions
+                Resource: "*"
+              # Web search is an AgentCore gateway's Web Search Tool, called by
+              # the gateway with this role. Any gateway, any region: which one
+              # is chosen in the console after this role exists. The search
+              # itself is authorised against the gateway's own service role.
+              - Sid: InvokeWebSearchGateway
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:InvokeGateway
+                Resource:
+                  - arn:aws:bedrock-agentcore:*:*:gateway/*
+              # What the SSM agent ECS injects uses to open the interactive
+              # channel for execute-command. They cannot be scoped to a
+              # resource, which is why who may open a session is controlled by
+              # ecs:ExecuteCommand on the caller's side rather than here.
+              - Sid: ExecuteCommandChannel
+                Effect: Allow
+                Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Resource: "*"
+
+  # ------------------------------------------------------------- web search
+  #
+  # Optional, and off by default. An AgentCore gateway with a Web Search Tool
+  # target, reached by the task role through IAM inbound authorization, which
+  # is what Panorama's /mcp endpoint searches with. The stack creates it and
+  # hands its URL to the task, so setting the parameter is the decision to
+  # offer search and nobody pastes the same thing into the console a second
+  # time. The console shows the gateway without offering to change it - the
+  # stack would delete a gateway out from under a URL somebody pasted over it
+  # - and keeps one switch, so an administrator can still turn search off.
+  #
+  # The gateway's own role is what runs the search. The task role can reach
+  # any gateway (InvokeWebSearchGateway above) and search through none of them
+  # except as each gateway's role allows.
+  WebSearchGatewayRole:
+    Type: AWS::IAM::Role
+    Condition: WithWebSearchGateway
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: bedrock-agentcore.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*"
+      Policies:
+        - PolicyName: web-search
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: InvokeGateway
+                Effect: Allow
+                Action: bedrock-agentcore:InvokeGateway
+                Resource: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*"
+              - Sid: InvokeWebSearch
+                Effect: Allow
+                Action: bedrock-agentcore:InvokeWebSearch
+                Resource: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:aws:tool/web-search.v1"
+
+  WebSearchGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    Condition: WithWebSearchGateway
+    Properties:
+      Name: !Sub
+        - "panorama-search-${Id}"
+        - Id: !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]]]
+      Description: Web search for Panorama's coding tools, called by the Panorama task role.
+      ProtocolType: MCP
+      AuthorizerType: AWS_IAM
+      RoleArn: !GetAtt WebSearchGatewayRole.Arn
+
+  WebSearchTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Condition: WithWebSearchGateway
+    Properties:
+      GatewayIdentifier: !Ref WebSearchGateway
+      Name: web-search
+      TargetConfiguration:
+        Mcp:
+          Connector:
+            Source:
+              ConnectorId: web-search
+            Configurations:
+              - Name: WebSearch
+                ParameterValues: {}
+      CredentialProviderConfigurations:
+        - CredentialProviderType: GATEWAY_IAM_ROLE
+
+  # ------------------------------------------------------------ load balancer
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/ecs/${AWS::StackName}"
+      RetentionInDays: !Ref LogRetentionDays
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: !Ref LoadBalancerScheme
+      Subnets: !Ref LoadBalancerSubnetIds
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      LoadBalancerAttributes:
+        # The default is 60 seconds and it measures the gap between bytes, so a
+        # long time-to-first-token or an extended thinking block truncates the
+        # stream mid-turn. This is the single most consequential default in the
+        # whole stack for a streaming gateway.
+        - Key: idle_timeout.timeout_seconds
+          Value: "600"
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: "true"
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 8088
+      Protocol: HTTP
+      TargetType: ip
+      # /readyz checks the database and the schema. /healthz is liveness only
+      # and would let a task with an unreachable database into rotation.
+      HealthCheckPath: /readyz
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher: { HttpCode: "200" }
+      TargetGroupAttributes:
+        # The whole window an in-flight stream gets when its task is replaced.
+        # ECS deregisters the target and waits for the load balancer to report
+        # it unused before it sends SIGTERM, so this is drain time rather than
+        # dead time. The ECS guidance to drop it to five seconds explicitly
+        # excepts streaming connections; do not follow it here.
+        - Key: deregistration_delay.timeout_seconds
+          Value: "300"
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  HttpRedirectListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
+
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt LoadBalancer.DNSName
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+
+  # ------------------------------------------------------------------ service
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref AWS::StackName
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref AWS::StackName
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+        CpuArchitecture: !Ref TaskCpuArchitecture
+      ContainerDefinitions:
+        - Name: panorama
+          Image: !If
+            - ImageTagIsDigest
+            - !Sub "${ImageRepository}@${ImageTag}"
+            - !Sub
+              - "${ImageRepository}:${Tag}"
+              - Tag: !If [ImageTagIsReleased, !FindInMap [Release, Image, Tag], !Ref ImageTag]
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8088
+              Protocol: tcp
+          # Fargate's ceiling, and it cannot be raised. server.shutdown_timeout
+          # below is set just under it so the process finishes its own drain
+          # rather than being killed part-way through it.
+          StopTimeout: 120
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: panorama
+          Environment:
+            - { Name: PANORAMA_SERVER_ADDR, Value: ":8088" }
+            - { Name: PANORAMA_SERVER_BASE_URL, Value: !Sub "https://${DomainName}" }
+            - { Name: PANORAMA_SERVER_SHUTDOWN_TIMEOUT, Value: "110s" }
+            - { Name: PANORAMA_DATABASE_DRIVER, Value: postgres }
+            # The discrete form. The host is a plain variable because it is not
+            # a secret; the two halves of the credential arrive below, as
+            # references ECS resolves at task start.
+            - { Name: PANORAMA_DATABASE_HOST, Value: !GetAtt DatabaseCluster.Endpoint.Address }
+            - { Name: PANORAMA_DATABASE_PORT, Value: !GetAtt DatabaseCluster.Endpoint.Port }
+            - { Name: PANORAMA_DATABASE_NAME, Value: panorama }
+            - { Name: PANORAMA_DATABASE_SSLMODE, Value: require }
+            # Each task pins its idle connections, so the pool ceiling is per
+            # task and not per deployment. A gateway whose hot path never
+            # touches the database does not need the file default of 25.
+            - { Name: PANORAMA_DATABASE_MAX_OPEN_CONNS, Value: "10" }
+            - { Name: PANORAMA_DATABASE_AUTO_MIGRATE, Value: !Ref AutoMigrate }
+            - { Name: PANORAMA_LOG_FORMAT, Value: json }
+            - { Name: PANORAMA_LOG_LEVEL, Value: info }
+            - { Name: PANORAMA_BEDROCK_REGION, Value: !Ref BedrockRegion }
+            # Empty is absent: config.lookup treats a variable set to the empty
+            # string as unset, so a stack that leaves this alone is unchanged.
+            - { Name: PANORAMA_OIDC_ALLOWED_DOMAINS, Value: !Ref OidcAllowedDomains }
+            # Empty without the gateway, which is absent for the same reason.
+            - Name: PANORAMA_WEB_SEARCH_GATEWAY_URL
+              Value: !If [WithWebSearchGateway, !GetAtt WebSearchGateway.GatewayUrl, ""]
+            # The SDK reads this for the Pricing API client and for STS. Each
+            # model provider takes its own region from the console instead (the
+            # setting above only seeds the first), so they can differ - which is
+            # the point of having both.
+            - { Name: AWS_REGION, Value: !Ref AWS::Region }
+          Secrets:
+            # One JSON key of the secret per variable. This is the shape ECS
+            # offers and the reason database.host exists beside database.dsn:
+            # ECS cannot concatenate, and resolving a DSN in the template would
+            # render the password to anyone holding ecs:DescribeTaskDefinition.
+            - Name: PANORAMA_DATABASE_USER
+              ValueFrom: !Sub "${DatabaseSecret}:username::"
+            - Name: PANORAMA_DATABASE_PASSWORD
+              ValueFrom: !Sub "${DatabaseSecret}:password::"
+            - Name: PANORAMA_ENCRYPTION_KEY
+              ValueFrom: !If
+                - GenerateEncryptionKey
+                - !Ref EncryptionKeySecret
+                - !Ref EncryptionKeySecretArn
+            # The whole connection, one JSON key per variable. It is one
+            # secret rather than a mix of stack parameters and a secret because
+            # it is one decision made at one sitting - and because a connection
+            # split across two places is a connection somebody half-changes.
+            - Name: PANORAMA_OIDC_ISSUER
+              ValueFrom: !Sub "${OidcSecret}:issuer::"
+            - Name: PANORAMA_OIDC_CLIENT_ID
+              ValueFrom: !Sub "${OidcSecret}:client_id::"
+            - Name: PANORAMA_OIDC_CLIENT_SECRET
+              ValueFrom: !Sub "${OidcSecret}:client_secret::"
+            - Name: PANORAMA_OIDC_SCOPES
+              ValueFrom: !Sub "${OidcSecret}:scopes::"
+            - Name: PANORAMA_OIDC_GROUPS_CLAIM
+              ValueFrom: !Sub "${OidcSecret}:groups_claim::"
+
+  Service:
+    Type: AWS::ECS::Service
+    # Without this the service can be created before the listener exists, and
+    # ECS refuses to register targets into a load balancer that is not yet
+    # serving.
+    DependsOn:
+      - HttpsListener
+      - DatabaseInstance
+    Properties:
+      ServiceName: panorama
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: !Ref DesiredCount
+      PropagateTags: SERVICE
+      # On, always, with no switch to turn it off - the deployment is operated
+      # through it and a debugging door that has to be enabled during the
+      # incident is a door nobody has.
+      #
+      # Two things it grants, stated because they are easy to under-read. The
+      # session runs as ROOT inside the container, not as the nonroot user the
+      # process runs as. And the runtime image carries a shell for it, so
+      # anyone holding ecs:ExecuteCommand on this cluster has an interactive
+      # root shell beside the Bedrock credentials and the database. Narrow that
+      # IAM action rather than relying on this being awkward to reach; every
+      # use of it is recorded in CloudTrail, naming the caller and the task.
+      EnableExecuteCommand: true
+      # /readyz fails while the schema is behind, so a task needs long enough
+      # to connect and check before the load balancer starts counting failures.
+      HealthCheckGracePeriodSeconds: 120
+      DeploymentConfiguration:
+        # New tasks come up and pass /readyz before any old task is touched.
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref ServiceSubnetIds
+          SecurityGroups:
+            - !Ref ServiceSecurityGroup
+          AssignPublicIp: !Ref AssignPublicIp
+      LoadBalancers:
+        - ContainerName: panorama
+          ContainerPort: 8088
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  ConsoleUrl:
+    Description: The console and the gateway endpoint. This is server.base_url.
+    Value: !Sub "https://${DomainName}"
+
+  LoadBalancerDnsName:
+    Description: Point DomainName here if you did not give a hosted zone.
+    Value: !GetAtt LoadBalancer.DNSName
+
+  OidcSecretArn:
+    Description: >-
+      The single sign-on connection. Put the issuer, client id and client
+      secret in here, then force a new deployment - nothing is read from it
+      until a task restarts.
+    Value: !Ref OidcSecret
+
+  OidcRedirectUri:
+    Description: Register this with your identity provider as an allowed callback URL.
+    Value: !Sub "https://${DomainName}/auth/oidc/callback"
+
+  MigrateCommand:
+    Description: >-
+      Run this before every service update, and once before the first one. It
+      applies pending migrations on a one-off task built from the current task
+      definition, so it runs the same image the service is about to.
+    Value: !Sub
+      - >-
+        aws ecs run-task --cluster ${Cluster} --task-definition ${TaskDefinition}
+        --launch-type FARGATE --region ${AWS::Region}
+        --network-configuration "awsvpcConfiguration={subnets=[${Subnets}],securityGroups=[${ServiceSecurityGroup}],assignPublicIp=${AssignPublicIp}}"
+        --overrides '{"containerOverrides":[{"name":"panorama","command":["migrate","up"]}]}'
+      - Subnets: !Join [",", !Ref ServiceSubnetIds]
+
+  Image:
+    Description: The image reference the task definition carries.
+    Value: !If
+      - ImageTagIsDigest
+      - !Sub "${ImageRepository}@${ImageTag}"
+      - !Sub
+        - "${ImageRepository}:${Tag}"
+        - Tag: !If [ImageTagIsReleased, !FindInMap [Release, Image, Tag], !Ref ImageTag]
+
+  ClusterName:
+    Value: !Ref Cluster
+
+  ServiceName:
+    Value: !GetAtt Service.Name
+
+  TaskDefinitionArn:
+    Value: !Ref TaskDefinition
+
+  DatabaseSecretArn:
+    Description: Database credentials, as JSON. Read it to connect with psql.
+    Value: !Ref DatabaseSecret
+
+  EncryptionKeySecretArn:
+    Description: >-
+      Copy this value somewhere outside this account. Losing it means
+      re-entering every integration credential.
+    Value: !If [GenerateEncryptionKey, !Ref EncryptionKeySecret, !Ref EncryptionKeySecretArn]
+
+  ServiceSecurityGroupId:
+    Value: !Ref ServiceSecurityGroup
+
+  WebSearchGatewayUrl:
+    Condition: WithWebSearchGateway
+    Description: >-
+      The gateway the tasks search with. Already in their configuration;
+      Settings, Web search shows it.
+    Value: !GetAtt WebSearchGateway.GatewayUrl

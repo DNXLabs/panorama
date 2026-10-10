@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: CLA
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+# The action needs to comment on and label pull requests, and to commit the
+# signature file to the signatures branch. Nothing else.
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    # Only run on the signature phrase or on pull request events, so unrelated
+    # issue comments do not spin up a job.
+    if: (github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') || github.event_name == 'pull_request_target'
+    steps:
+      - name: Check or record CLA signature
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: signatures/version1/cla.json
+          path-to-document: https://github.com/dnxlabs/panorama/blob/main/CLA.md
+          branch: cla-signatures
+          allowlist: dependabot[bot],renovate[bot]
+          custom-notsigned-prcomment: |
+            Thanks for the contribution.
+
+            Before this can be merged, please sign the
+            [Contributor License Agreement](https://github.com/dnxlabs/panorama/blob/main/CLA.md).
+            You sign once, not per pull request.
+
+            Panorama is AGPL-3.0, and DNX also distributes an enterprise edition under a
+            commercial licence. The CLA grants DNX the right to relicense contributed
+            code so both editions can be maintained from one codebase. You keep the
+            copyright in everything you write.
+
+            To sign, post exactly the following as a new comment on this pull request:
+          custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
+          custom-allsigned-prcomment: 'All contributors have signed the CLA. Thanks.'

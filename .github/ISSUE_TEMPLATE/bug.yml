@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: Bug
+description: Something does not work as the manual says it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security issue is not a bug report: report it privately, see SECURITY.md.
+        Never paste a token, a setup code or a prompt body here.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `panorama version`, or the image tag or digest.
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How it is deployed
+      options:
+        - docker compose (the Quickstart)
+        - CloudFormation template
+        - Something else (say below)
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: Coding tool and version
+      description: For example Claude Code 2.1.291, opencode 1.18.30, Codex. Leave empty if none is involved.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: Steps to reproduce, the message you saw (quoted exactly), and the page of the manual you were following.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant gateway log lines. They carry no prompt bodies, but check them for anything you would not post publicly.
+      render: text

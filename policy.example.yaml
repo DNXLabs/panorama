@@ -1,0 +1,176 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Panorama policy - routes and budgets.
+#
+# Apply it with:
+#
+#     panorama policy apply -f policy.yaml
+#
+# and check it without applying:
+#
+#     panorama policy check -f policy.yaml
+#
+# Applying is idempotent: routes and budgets are matched to what is
+# already stored by their stable identity - a route's name, a budget's scope and
+# period - so re-applying the same file on every deploy changes nothing.
+#
+# A policy file is the whole policy. Anything stored that is not in the file is
+# removed. `panorama policy apply` says how many entries it removed, for exactly
+# this reason.
+#
+# Everything here can also be edited from the console - routes on Routing,
+# budgets on People & teams - which is where most deployments do it. The file
+# exists because the people who deploy a gateway keep their configuration in
+# version control, and a policy that can only be built by clicking is a policy
+# nobody can review in a pull request.
+
+# --- Routes ----------------------------------------------------------------
+#
+# A route is a name a client may ask for, and the only thing a client may ask
+# for. An engineer sets ANTHROPIC_MODEL (or the model in opencode or Codex) to a
+# route name and never names a model; a name absent from this list is refused at
+# the gateway, and there is no wildcard and no "allow any model" switch anywhere
+# in the product.
+#
+# A route carries three different kinds of decision:
+#
+#   conditions - users, teams, tools. Who the route exists for. Omitted means
+#                everybody. Every condition given must hold, so a route naming a
+#                person and a team admits that person when they are in that team
+#                and nobody else. A request from outside them is refused exactly
+#                as though the name had never been created.
+#
+#   model      - which model the name becomes, on which provider. Required, and
+#                one model: when the provider throttles it, the client is sent
+#                a 429 and retries.
+#
+#   serves_over_soft
+#              - whether the route keeps serving once a budget governing the
+#                caller has passed its soft limit. True by default.
+#
+# A route never changes model on a budget: a client is configured with a
+# route's context window once and cannot be told mid-session that it shrank, so
+# the gateway says "this route has stopped, here are the ones still served"
+# instead of quietly moving somebody's work onto a smaller model. Put the
+# cheaper model on a route of its own.
+#
+# A hard limit blocks before any of this is consulted, so there is no way to
+# route around a ceiling somebody set.
+#
+# Models are written as provider/model: the provider - bedrock for
+# bedrock-runtime, bedrock-mantle for bedrock-mantle - then the model exactly as
+# that provider names it, inference-profile prefix included, because that string
+# is what the provider is given. A model with no provider is refused: the same
+# id can be valid on both providers, and they differ in where a prompt is
+# processed and what it costs.
+#
+# A route is served only on the client APIs its model speaks. Claude on either
+# provider speaks the Anthropic Messages API (Claude Code, opencode); most
+# bedrock-mantle models speak OpenAI Chat Completions (opencode, Cline,
+# Continue), and some also speak Responses (Codex, and opencode, which is sent
+# Responses whenever the model speaks it). `panorama policy check`
+# refuses a file naming a model this deployment has not discovered, or one that
+# speaks nothing it serves. Run `panorama models list` to see them with their
+# residency, their APIs and their price.
+
+routes:
+  # The ordinary case: one name, one model, available to everybody.
+  #
+  # Not called "default", and that is not a style preference. Claude Code
+  # resolves "default" itself - it means "clear any override and use the
+  # runtime default for this account" - so a route with that name is never
+  # asked for by it. The client sends a model id instead, the gateway refuses a
+  # name nobody routed, and the refusal lists the route the engineer thought
+  # they were using. The alias names go the same way: best, fable, sonnet,
+  # opus, haiku, opusplan. `panorama policy check` refuses all of them.
+  - name: standard
+    description: What every engineer gets.
+    model: bedrock/us.anthropic.claude-sonnet-5
+
+  # Claude Code asks for a small, fast model of its own accord - summarising a
+  # conversation, naming a session. If that name is not a route the gateway
+  # refuses it, which looks like a broken tool rather than a missing route, so
+  # give it one and point ANTHROPIC_DEFAULT_HAIKU_MODEL at it.
+  - name: fast
+    description: The cheap model, for the asides a coding agent makes on its own.
+    model: bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0
+
+  # A route that exists for one team. To everybody else this name does not
+  # exist: the refusal they get names only the routes they can use, because a
+  # route somebody may not use is not one they should be able to detect.
+  #
+  # Not called "opus", for the same reason nothing here is called "default":
+  # Claude Code resolves that name itself and would never ask for it.
+  #
+  # serves_over_soft: false is how an expensive route is fenced. Past a soft
+  # limit this route stops and the refusal names the routes that are still
+  # served, so the engineer switches - /model in Claude Code, the model list in
+  # opencode - rather than being moved onto a smaller model without being told.
+  # True is the default; false is the deliberate mark on the expensive route.
+  - name: deep
+    description: For the platform team, when Sonnet is not enough.
+    teams: [platform]
+    model: bedrock/us.anthropic.claude-opus-4-6
+    serves_over_soft: false
+
+  # A model served only on bedrock-mantle, in the region that provider is
+  # configured for, with no inference profile: the region is the residency
+  # answer. gpt-oss speaks OpenAI Chat Completions and Responses, so this route
+  # is offered to opencode and Codex and refused, with the endpoint that would
+  # work, if Claude Code names it.
+  - name: open-weight
+    description: An open-weight model, for the work that does not need Claude.
+    model: bedrock-mantle/openai.gpt-oss-120b
+
+  # Conditions can name a tool, which is how a pipeline is held to a cheaper
+  # model than an interactive session. Tools are identified from the user agent;
+  # `panorama models list` is not the list to check here - the names are
+  # claude-code, opencode, codex-cli, cline, continue, gemini-cli, anthropic-sdk
+  # and unknown.
+  - name: ci
+    description: What a build agent gets.
+    tools: [unknown]
+    model: bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0
+
+# --- Budgets ---------------------------------------------------------------
+#
+# A budget is a limit on a scope, for a window. A route reads one and cannot
+# change it, so a limit has one place it is set and one answer.
+#
+# Two kinds of limit, both optional and independent:
+#
+#   soft - warns, and stops the routes marked `serves_over_soft: false`.
+#          Everything else carries on.
+#   hard - blocks, with a message that says what happened, how much of which
+#          limit was used, when it resets, and who can raise it.
+#
+# Windows are always UTC: a calendar day, a week beginning Monday, or a calendar
+# month. Spend resets when the window rolls over; nothing carries forward.
+#
+# Amounts are US dollars, written as decimal text so they stay exactly what you
+# typed. 0.30 is thirty cents, not the nearest float to it.
+
+budgets:
+  # The whole deployment. Warn at 800, stop at 1000.
+  - scope: org
+    period: month
+    name: deployment
+    soft_limit: 800.00
+    hard_limit: 1000.00
+
+  # A team, by slug. Create teams with `panorama team create`.
+  - scope: team
+    id: platform
+    period: month
+    name: platform engineering
+    soft_limit: 300.00
+
+  # A person, by email address. A per-user daily ceiling is mostly a
+  # circuit-breaker: it catches an agent stuck in a loop long before the
+  # organization's monthly limit would notice.
+  - scope: user
+    id: alice@example.com
+    period: day
+    name: alice's daily ceiling
+    hard_limit: 20.00

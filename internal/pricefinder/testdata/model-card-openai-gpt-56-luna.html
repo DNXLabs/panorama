@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+    <html xmlns="http://www.w3.org/1999/xhtml" lang="en-US"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>GPT-5.6 Luna - Amazon Bedrock</title><meta name="viewport" content="width=device-width,initial-scale=1" /><meta name="assets_root" content="/assets" /><meta name="target_state" content="model-card-openai-gpt-56-luna" /><meta name="default_state" content="model-card-openai-gpt-56-luna" /><link rel="icon" type="image/ico" href="/assets/images/favicon.ico" /><link rel="shortcut icon" type="image/ico" href="/assets/images/favicon.ico" /><link rel="canonical" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" /><meta name="description" content="GPT-5.6 Luna is the fast and affordable model from OpenAI. Use Luna for high-volume inference tasks like classification, summarization, routing, and real-time applications where latency and cost per token matter most. For more information about model development and performance, see the" /><meta name="deployment_region" content="IAD" /><meta name="product" content="Amazon Bedrock" /><meta name="guide" content="User Guide" /><meta name="abstract" content="User Guide for the Amazon Bedrock service." /><meta name="guide-locale" content="en_us" /><meta name="tocs" content="toc-contents.json" /><link rel="canonical" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" /><link rel="alternate" href="https://docs.aws.amazon.com/id_id/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="id-id" /><link rel="alternate" href="https://docs.aws.amazon.com/id_id/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="id" /><link rel="alternate" href="https://docs.aws.amazon.com/de_de/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="de-de" /><link rel="alternate" href="https://docs.aws.amazon.com/de_de/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="de" /><link rel="alternate" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="en-us" /><link rel="alternate" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="en" /><link rel="alternate" href="https://docs.aws.amazon.com/es_es/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="es-es" /><link rel="alternate" href="https://docs.aws.amazon.com/es_es/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="es" /><link rel="alternate" href="https://docs.aws.amazon.com/fr_fr/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="fr-fr" /><link rel="alternate" href="https://docs.aws.amazon.com/fr_fr/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="fr" /><link rel="alternate" href="https://docs.aws.amazon.com/it_it/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="it-it" /><link rel="alternate" href="https://docs.aws.amazon.com/it_it/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="it" /><link rel="alternate" href="https://docs.aws.amazon.com/ja_jp/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="ja-jp" /><link rel="alternate" href="https://docs.aws.amazon.com/ja_jp/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="ja" /><link rel="alternate" href="https://docs.aws.amazon.com/ko_kr/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="ko-kr" /><link rel="alternate" href="https://docs.aws.amazon.com/ko_kr/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="ko" /><link rel="alternate" href="https://docs.aws.amazon.com/pt_br/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="pt-br" /><link rel="alternate" href="https://docs.aws.amazon.com/pt_br/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="pt" /><link rel="alternate" href="https://docs.aws.amazon.com/zh_cn/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="zh-cn" /><link rel="alternate" href="https://docs.aws.amazon.com/zh_tw/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="zh-tw" /><link rel="alternate" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" hreflang="x-default" /><meta name="feedback-folder" content="2d8c2a09-1dac-41bf-9893-c0333d272b2c" /><meta name="feedback-item" content="Bedrock" /><meta name="this_doc_product" content="Amazon Bedrock" /><meta name="this_doc_guide" content="User Guide" /><head xmlns="http://www.w3.org/1999/xhtml"> <script defer="" src="/assets/r/awsdocs-doc-page.2.0.0.js"></script><link href="/assets/r/awsdocs-doc-page.2.0.0.css" rel="stylesheet"/></head>
+<script defer="" id="awsc-panorama-bundle" type="text/javascript" src="https://prod.pa.cdn.uis.awsstatic.com/panorama-nav-init.js" data-config="{'appEntity':'aws-documentation','region':'us-east-1','service':'bedrock'}"></script><meta id="panorama-serviceSubSection" value="User Guide" /><meta id="panorama-serviceConsolePage" value="GPT-5.6 Luna" /></head><body class="awsdocs awsui"><div class="awsdocs-container"><p><a href="model-card-openai-gpt-56-luna.md">View a markdown version of this page</a></p><awsdocs-header></awsdocs-header><awsui-app-layout id="app-layout" class="awsui-util-no-gutters" ng-controller="ContentController as $ctrl" header-selector="awsdocs-header" navigation-hide="false" navigation-width="$ctrl.navWidth" navigation-open="$ctrl.navOpen" navigation-change="$ctrl.onNavChange($event)" tools-hide="$ctrl.hideTools" tools-width="$ctrl.toolsWidth" tools-open="$ctrl.toolsOpen" tools-change="$ctrl.onToolsChange($event)"><div id="guide-toc" dom-region="navigation"><awsdocs-toc></awsdocs-toc></div><div id="main-column" dom-region="content" tabindex="-1"><awsdocs-view class="awsdocs-view"><div id="awsdocs-content"><head><title>GPT-5.6 Luna - Amazon Bedrock</title><meta name="pdf" content="/pdfs/bedrock/latest/userguide/bedrock-ug.pdf#model-card-openai-gpt-56-luna" /><meta name="rss" content="bedrock-ug.rss" /><meta name="forums" content="https://repost.aws/tags/TAQeKlaPaNRQ2tWB6P7KrMag" /><meta name="feedback" content="https://docs.aws.amazon.com/forms/aws-doc-feedback?feedback_destination_id=2d8c2a09-1dac-41bf-9893-c0333d272b2c&amp;topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" /><meta name="feedback-yes" content="feedbackyes.html?topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" /><meta name="feedback-no" content="feedbackno.html?topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html" /><meta name="keywords" content="Amazon Bedrock,bedrock" /><link rel="alternate" type="text/markdown" href="model-card-openai-gpt-56-luna.md" title="Markdown version" /><script type="application/ld+json">
+{
+    "@context" : "https://schema.org",
+    "@type" : "BreadcrumbList",
+    "itemListElement" : [
+      {
+        "@type" : "ListItem",
+        "position" : 1,
+        "name" : "AWS",
+        "item" : "https://aws.amazon.com"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 2,
+        "name" : "Amazon Bedrock",
+        "item" : "https://docs.aws.amazon.com/bedrock/index.html"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 3,
+        "name" : "User Guide",
+        "item" : "https://docs.aws.amazon.com/bedrock/latest/userguide"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 4,
+        "name" : "Models at a glance",
+        "item" : "https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards.html"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 5,
+        "name" : "OpenAI",
+        "item" : "https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards-openai.html"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 6,
+        "name" : "GPT-5.6 Luna",
+        "item" : "https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards-openai.html"
+      }
+    ]
+}
+</script></head><body><div id="main"><div style="display: none"><a href="/pdfs/bedrock/latest/userguide/bedrock-ug.pdf#model-card-openai-gpt-56-luna" target="_blank" rel="noopener noreferrer" title="Open PDF"></a></div><div id="breadcrumbs" class="breadcrumb"><a href="/index.html">Documentation</a><a href="/bedrock/index.html">Amazon Bedrock</a><a href="what-is-bedrock.html">User Guide</a></div><div id="page-toc-src"><a href="#model-card-openai-gpt-56-luna-header">Icon showing a circular pattern with interwoven curved segments forming a pinwheel design. OpenAI — GPT-5.6 Luna</a><a href="#model-card-openai-gpt-56-luna-details">Model Details</a><a href="#model-card-openai-gpt-56-luna-apis-endpoints">Endpoints and APIs supported</a><a href="#model-card-openai-gpt-56-luna-capabilities">Capabilities and Features</a><a href="#model-card-openai-gpt-56-luna-pricing">Pricing</a><a href="#model-card-openai-gpt-56-luna-programmatic-access">Programmatic Access</a><a href="#model-card-openai-gpt-56-luna-tiers">Service Tiers</a><a href="#model-card-openai-gpt-56-luna-regional-availability">Regional Availability</a><a href="#model-card-openai-gpt-56-luna-quotas">Quotas and Limits</a><a href="#model-card-openai-gpt-56-luna-sample-code">Sample Code</a></div><div id="main-content" class="awsui-util-container"><div id="main-col-body"><awsdocs-language-banner data-service="$ctrl.pageService"></awsdocs-language-banner><h1 class="topictitle" id="model-card-openai-gpt-56-luna">GPT-5.6 Luna</h1><div class="awsdocs-page-header-container"><awsdocs-page-header></awsdocs-page-header><awsdocs-filter-selector id="awsdocs-filter-selector"></awsdocs-filter-selector></div>
+  <h2 id="model-card-openai-gpt-56-luna-header"><span class="inlinemediaobject"><img src="/images/bedrock/latest/userguide/images/models/openai.png" class="aws-docs-img-whiteBg aws-docs-img-xs-padding" alt="Icon showing a circular pattern with interwoven curved segments forming a pinwheel design." data-alt-text-source="generated" height="30px" /></span> OpenAI — GPT-5.6 Luna</h2>
+  
+  <h2 id="model-card-openai-gpt-56-luna-details">Model Details</h2>
+  <p>GPT-5.6 Luna is the fast and affordable model from OpenAI. Use Luna for high-volume inference tasks like classification, summarization, routing, and real-time applications where latency and cost per token matter most. For more information about model development and performance, see the <a href="https://deploymentsafety.openai.com/gpt-5-6/gpt-5-6.pdf" rel="noopener noreferrer" target="_blank"><span>model/service card</span><awsui-icon class="awsdocs-link-icon" name="external"></awsui-icon></a>.</p>
+
+  <div class="itemizedlist">
+    
+    
+    
+    
+    
+    
+    
+    
+    
+  <ul class="itemizedlist"><li class="listitem" style="list-style-type: none"><p><b>Model launch date:</b> July 13, 2026</p></li><li class="listitem" style="list-style-type: none"><p><b>EOL no sooner than:</b> July 13, 2027</p></li><li class="listitem" style="list-style-type: none"><p><b>Legacy period:</b> at least 6 months</p></li><li class="listitem" style="list-style-type: none"><p><b>Model lifecycle policy:</b> <a href="./model-lifecycle-legacy.html">Model lifecycle (For Models Launched Prior to Sept 7 2026)</a></p></li><li class="listitem" style="list-style-type: none"><p><b>Model EOL date:</b> N/A</p></li><li class="listitem" style="list-style-type: none"><p><b>End User License Agreements and Terms of Use:</b> <a href="https://aws.amazon.com/legal/bedrock/third-party-models/" rel="noopener noreferrer" target="_blank"><span>View</span><awsui-icon class="awsdocs-link-icon" name="external"></awsui-icon></a></p></li><li class="listitem" style="list-style-type: none"><p><b>Model lifecycle:</b> Active</p></li><li class="listitem" style="list-style-type: none"><p><b>Context window:</b> 1M tokens</p></li><li class="listitem" style="list-style-type: none"><p><b>Marketplace product ID:</b> <code class="code">prod-bpeu2ptegwjfa</code></p></li></ul></div>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14b4b7"><thead>
+     <tr>
+      <th><b>Input Modalities</b></th>
+      <th><b>Output Modalities</b></th>
+     </tr>
+    </thead>
+     <tr><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /> Audio</td><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> Embedding</td></tr>
+     <tr><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> Image</td><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> Image</td></tr>
+     <tr><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /> Speech</td><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> Speech</td></tr>
+     <tr><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> Text</td><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> Text</td></tr>
+     <tr><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /> Video</td><td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> Video</td></tr>
+    </table></div></div>
+  
+  <h2 id="model-card-openai-gpt-56-luna-apis-endpoints">Endpoints and APIs supported</h2>
+  <p>The following tables show which endpoints and APIs are supported for GPT-5.6 Luna. For more information, see <a href="./apis.html">APIs supported by Amazon Bedrock</a> and <a href="./endpoints.html">Endpoints supported by Amazon Bedrock</a>.</p>
+  <p><b>Endpoint support</b></p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14b6b7"><thead>
+     <tr>
+      <th><b>Endpoint</b></th>
+      <th><b>Supported</b></th>
+     </tr>
+    </thead>
+     <tr>
+      <td tabindex="-1"><code class="code">bedrock-runtime</code></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="supported" style="max-width:10px" height="10px" /></td>
+     </tr>
+     <tr>
+      <td tabindex="-1"><code class="code">bedrock-mantle</code></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="supported" style="max-width:10px" height="10px" /></td>
+     </tr>
+    </table></div></div>
+  <p><b>APIs supported on <code class="code">bedrock-runtime</code> endpoint</b></p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14b6c11"><thead>
+     <tr>
+      <th><b>Messages</b></th>
+      <th><b>Responses</b></th>
+      <th><b>Chat Completions</b></th>
+      <th><b>Converse</b></th>
+      <th><b>Invoke</b></th>
+     </tr>
+    </thead>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="not-supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="not-supported" style="max-width:10px" height="10px" /></td>
+     </tr>
+    </table></div></div>
+  <p><b>APIs supported on <code class="code">bedrock-mantle</code> endpoint</b></p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14b6c15"><thead>
+     <tr>
+      <th><b>Messages</b></th>
+      <th><b>Responses</b></th>
+      <th><b>Chat Completions</b></th>
+      <th><b>Converse</b></th>
+      <th><b>Invoke</b></th>
+     </tr>
+    </thead>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="not-supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="not-supported" style="max-width:10px" height="10px" /></td>
+      <td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="not-supported" style="max-width:10px" height="10px" /></td>
+     </tr>
+    </table></div></div>
+  <div class="awsdocs-note"><div class="awsdocs-note-title"><awsui-icon name="status-info" variant="link"></awsui-icon><h6>Note</h6></div><div class="awsdocs-note-text"><p>On <code class="code">bedrock-mantle</code>, both APIs use the <code class="code">/openai/v1</code> base path, not <code class="code">/v1</code>. Use either API with this model:</p><div class="itemizedlist">
+     
+     
+   <ul class="itemizedlist"><li class="listitem"><p>For Responses, use <code class="code">/openai/v1/responses</code>.</p></li><li class="listitem"><p>For Chat Completions, use <code class="code">/openai/v1/chat/completions</code>.</p></li></ul></div></div></div>
+  <div class="awsdocs-note awsdocs-tip"><div class="awsdocs-note-title"><awsui-icon name="status-info" variant="link"></awsui-icon><h6>Tip</h6></div><div class="awsdocs-note-text"><p>Whenever possible, we recommend using the <code class="code">bedrock-runtime</code> endpoint for new applications. See <a href="./endpoints.html">Endpoints supported by Amazon Bedrock</a> for details.</p></div></div>
+  
+  <h2 id="model-card-openai-gpt-56-luna-capabilities">Capabilities and Features</h2>
+
+  <p><b><u>Bedrock Features</u></b></p>
+  <p><b>Features supported using <code class="code">bedrock-runtime</code> endpoint</b></p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14b8b7"><thead>
+     <tr>
+      <th><b>Supported</b></th>
+      <th><b>Not Supported</b></th>
+     </tr>
+    </thead>
+     <tr>
+      <td style="vertical-align: top;" tabindex="-1">
+       <div class="itemizedlist">
+    
+    
+    
+    
+    
+    
+    
+    
+    
+       <ul class="itemizedlist"><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="projects.html" rel="noopener noreferrer" target="_blank">Projects (default project only)</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="model-invocation-logging.html" rel="noopener noreferrer" target="_blank">Invocation logs</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="/bedrock/latest/APIReference/API_runtime_InvokeModelWithResponseStream.html" rel="noopener noreferrer" target="_blank">Response streaming</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="abuse-detection.html" rel="noopener noreferrer" target="_blank">Abuse detection</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="guardrails.html" rel="noopener noreferrer" target="_blank">Guardrails</a> (<a href="conversation-inference.html" rel="noopener noreferrer" target="_blank">Converse API</a> only)</p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="cost-mgmt-application-inference-profiles.html" rel="noopener noreferrer" target="_blank">Application inference profiles</a> (<a href="conversation-inference.html" rel="noopener noreferrer" target="_blank">Converse API</a> only; not supported with Responses or Chat Completions APIs)</p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="prompt-caching.html#prompt-caching-implicit" rel="noopener noreferrer" target="_blank">Implicit Prompt Caching</a> (Responses API only)</p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="prompt-caching.html#prompt-caching-explicit" rel="noopener noreferrer" target="_blank">Explicit Prompt Caching</a> (Responses API only)</p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="structured-output.html" rel="noopener noreferrer" target="_blank">Structured outputs</a></p></li></ul></div>
+      </td>
+      <td style="vertical-align: top;" tabindex="-1">
+       <div class="itemizedlist">
+    
+    
+    
+       <ul class="itemizedlist"><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="tool-use.html" rel="noopener noreferrer" target="_blank">Server-side tool use</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="prompt-routing.html" rel="noopener noreferrer" target="_blank">Intelligent prompt routing</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="count-tokens.html" rel="noopener noreferrer" target="_blank">Count tokens</a></p></li></ul></div>
+      </td>
+     </tr>
+    </table></div></div>
+  <p><b>Features supported using <code class="code">bedrock-mantle</code> endpoint</b></p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14b8c11"><thead>
+     <tr>
+      <th><b>Supported</b></th>
+      <th><b>Not Supported</b></th>
+     </tr>
+    </thead>
+     <tr>
+      <td style="vertical-align: top;" tabindex="-1">
+       <div class="itemizedlist">
+    
+    
+    
+    
+       <ul class="itemizedlist"><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="tool-use.html" rel="noopener noreferrer" target="_blank">Server-side tool calling</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="projects.html" rel="noopener noreferrer" target="_blank">Projects</a></p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="prompt-caching.html#prompt-caching-implicit" rel="noopener noreferrer" target="_blank">Implicit Prompt Caching</a> (Responses API only)</p></li><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="prompt-caching.html#prompt-caching-explicit" rel="noopener noreferrer" target="_blank">Explicit Prompt Caching</a> (Responses API only)</p></li></ul></div>
+      </td>
+      <td style="vertical-align: top;" tabindex="-1">
+       <div class="itemizedlist">
+    
+       <ul class="itemizedlist"><li class="listitem" style="list-style-type: none"><p><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /> <a href="cost-mgmt-application-inference-profiles.html" rel="noopener noreferrer" target="_blank">Application inference profiles</a> (Responses and Chat Completions APIs only)</p></li></ul></div>
+      </td>
+     </tr>
+    </table></div></div>
+  
+  <h2 id="model-card-openai-gpt-56-luna-pricing">Pricing</h2>
+  <p>All prices are in USD per 1 million tokens for the Standard tier.</p>
+  <p>Commercial In-Region prices include a 10% fee over OpenAI rates. You do not need to add this fee.</p>
+  <p><em>Priority and Flex tiers are not supported for this model.</em></p>
+   
+   <h3 id="model-card-openai-gpt-56-luna-pricing-commercial-short">Commercial Regions — short context (272K input tokens or fewer)</h3>
+   <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c10b9b3"><thead>
+     <tr>
+      <th><b>Inference option</b></th>
+      <th><b>Input</b></th>
+      <th><b>Input — 30m cache write</b></th>
+      <th><b>Input — cache read</b></th>
+      <th><b>Output</b></th>
+     </tr>
+    </thead>
+     <tr><td tabindex="-1">In-Region</td><td tabindex="-1">$0.22</td><td tabindex="-1">$0.275</td><td tabindex="-1">$0.022</td><td tabindex="-1">$1.32</td></tr>
+     <tr><td tabindex="-1">Geo CRIS</td><td tabindex="-1">$0.22</td><td tabindex="-1">$0.275</td><td tabindex="-1">$0.022</td><td tabindex="-1">$1.32</td></tr>
+     <tr><td tabindex="-1">Global CRIS</td><td tabindex="-1">$0.20</td><td tabindex="-1">$0.25</td><td tabindex="-1">$0.02</td><td tabindex="-1">$1.20</td></tr>
+    </table></div></div>
+   
+   
+   <h3 id="model-card-openai-gpt-56-luna-pricing-commercial-long">Commercial Regions — long context (more than 272K input tokens)</h3>
+   <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c10c11b3"><thead>
+     <tr>
+      <th><b>Inference option</b></th>
+      <th><b>Input</b></th>
+      <th><b>Input — 30m cache write</b></th>
+      <th><b>Input — cache read</b></th>
+      <th><b>Output</b></th>
+     </tr>
+    </thead>
+     <tr><td tabindex="-1">In-Region</td><td tabindex="-1">$0.44</td><td tabindex="-1">$0.55</td><td tabindex="-1">$0.044</td><td tabindex="-1">$1.98</td></tr>
+     <tr><td tabindex="-1">Geo CRIS</td><td tabindex="-1">$0.44</td><td tabindex="-1">$0.55</td><td tabindex="-1">$0.044</td><td tabindex="-1">$1.98</td></tr>
+     <tr><td tabindex="-1">Global CRIS</td><td tabindex="-1">$0.40</td><td tabindex="-1">$0.50</td><td tabindex="-1">$0.04</td><td tabindex="-1">$1.80</td></tr>
+    </table></div></div>
+   
+   
+   <h3 id="model-card-openai-gpt-56-luna-pricing-govcloud">AWS GovCloud (US-East and US-West)</h3>
+    
+    <h4 id="model-card-openai-gpt-56-luna-pricing-govcloud-short">Short context (272K input tokens or fewer)</h4>
+    <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c10c13b3b3"><thead>
+     <tr>
+      <th><b>Inference option</b></th>
+      <th><b>Input</b></th>
+      <th><b>Input — 30m cache write</b></th>
+      <th><b>Input — cache read</b></th>
+      <th><b>Output</b></th>
+     </tr>
+    </thead>
+     <tr><td tabindex="-1">In-Region</td><td tabindex="-1">$0.264</td><td tabindex="-1">$0.33</td><td tabindex="-1">$0.0264</td><td tabindex="-1">$1.584</td></tr>
+    </table></div></div>
+    
+    
+    <h4 id="model-card-openai-gpt-56-luna-pricing-govcloud-long">Long context (more than 272K input tokens)</h4>
+    <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c10c13b5b3"><thead>
+     <tr>
+      <th><b>Inference option</b></th>
+      <th><b>Input</b></th>
+      <th><b>Input — 30m cache write</b></th>
+      <th><b>Input — cache read</b></th>
+      <th><b>Output</b></th>
+     </tr>
+    </thead>
+     <tr><td tabindex="-1">In-Region</td><td tabindex="-1">$0.528</td><td tabindex="-1">$0.66</td><td tabindex="-1">$0.0528</td><td tabindex="-1">$2.376</td></tr>
+    </table></div></div>
+    
+   
+  
+  <h2 id="model-card-openai-gpt-56-luna-programmatic-access">Programmatic Access</h2>
+  <p>Use the following model IDs and endpoint URLs to access this model programmatically. For more information about the available APIs and endpoints, see <a href="apis.html" rel="noopener noreferrer" target="_blank">APIs supported</a> and <a href="endpoints.html" rel="noopener noreferrer" target="_blank">Endpoints supported</a>.</p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c12b5"><thead>
+     <tr>
+      <th><b>Endpoint</b></th>
+      <th><b>Model ID</b></th>
+      <th><b>In-Region endpoint URL</b></th>
+      <th><b>Geo inference ID</b></th>
+      <th><b>Global inference ID</b></th>
+     </tr>
+    </thead>
+     <tr>
+      <td tabindex="-1"><code class="code">bedrock-mantle</code></td>
+      <td tabindex="-1"><code class="code">openai.gpt-5.6-luna</code></td>
+      <td tabindex="-1"><code class="code">https://bedrock-mantle.<span>{</span>region}.api.aws/openai/v1</code></td>
+      <td tabindex="-1">Not supported</td>
+      <td tabindex="-1">Not supported</td>
+     </tr>
+     <tr>
+      <td tabindex="-1"><code class="code">bedrock-runtime</code></td>
+      <td tabindex="-1"><code class="code">openai.gpt-5.6-luna</code></td>
+      <td tabindex="-1">Not supported</td>
+      <td tabindex="-1"><code class="code">us.openai.gpt-5.6-luna</code> in the commercial AWS Regions, <code class="code">in.openai.gpt-5.6-luna</code> in the India Regions</td>
+      <td tabindex="-1"><code class="code">global.openai.gpt-5.6-luna</code></td>
+     </tr>
+    </table></div></div>
+  <p><em>For example, if region is us-east-1 (N. Virginia), then the bedrock-mantle endpoint URL will be "https://bedrock-mantle.us-east-1.api.aws/openai/v1". On <code class="code">bedrock-runtime</code>, the base URL is "https://bedrock-runtime.<span>{</span>region}.amazonaws.com/openai/v1" and requests must name the geographic cross-Region inference ID <code class="code">us.openai.gpt-5.6-luna</code> as the model.</em></p>
+  
+  <h2 id="model-card-openai-gpt-56-luna-tiers">Service Tiers</h2>
+  <p>Amazon Bedrock offers multiple service tiers to match your workload requirements. <b>Standard</b> provides pay-per-token access with no commitment (set <code class="code">"service_tier": "default"</code> or omit the field). <b>Priority</b> delivers the fastest response times for a price premium (set <code class="code">"service_tier": "priority"</code>). <b>Flex</b> provides lower-cost access for flexible, non-time-sensitive workloads (set <code class="code">"service_tier": "flex"</code>). <b>Reserved</b> provides dedicated throughput with a term commitment for predictable workloads; it is set at the account level rather than per request (contact your AWS account team to enable). For more information, see <a href="service-tiers-inference.html" rel="noopener noreferrer" target="_blank">service tiers</a>.</p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c14b5"><thead>
+     <tr>
+      <th><b>Standard</b></th>
+      <th><b>Priority</b></th>
+      <th><b>Flex</b></th>
+      <th><b>Reserved</b></th>
+     </tr>
+    </thead>
+     <tr>
+      <td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td>
+      <td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td>
+      <td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td>
+      <td tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td>
+     </tr>
+    </table></div></div>
+  
+  <h2 id="model-card-openai-gpt-56-luna-regional-availability">Regional Availability</h2>
+  <p><b><u>Regional availability at a glance</u></b></p>
+  <p>Amazon Bedrock offers three inference options: <b>In-Region</b> keeps requests within a single Region for strict compliance, <b>Geo Cross-Region</b> routes across Regions within a geography (such as US, EU, and APAC) while respecting data residency, and <b>Global Cross-Region</b> routes anywhere worldwide when there are no residency constraints. Refer to the <a href="./models-region-compatibility.html">Regional availability by models</a> page for more details.</p>
+  <p>Availability differs by endpoint.</p>
+  <p><b>Availability using the <code class="code">bedrock-mantle</code> endpoint</b></p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c16c11"><thead>
+     <tr>
+      <th><b>Region</b></th>
+      <th><b>In-Region</b></th>
+      <th><b>Geo</b></th>
+      <th><b>Global</b></th>
+     </tr>
+    </thead>
+     <tr><td tabindex="-1"><code class="code">us-east-1</code> (N. Virginia)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">us-east-2</code> (Ohio)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">us-west-2</code> (Oregon)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">us-gov-west-1</code> (GovCloud West)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">us-gov-east-1</code> (GovCloud East)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." data-alt-text-source="generated" style="max-width:10px" height="10px" /></td></tr>
+    </table></div></div>
+  <p><b>Availability using the <code class="code">bedrock-runtime</code> endpoint</b></p>
+  <div class="table-container"><div class="table-contents"><table id="w626aac11c28c14c16c15"><thead>
+     <tr>
+      <th><b>Region</b></th>
+      <th><b>In-Region</b></th>
+      <th><b>Geo</b></th>
+      <th><b>Global</b></th>
+     </tr>
+    </thead>
+     <tr><td tabindex="-1"><code class="code">us-east-1</code> (N. Virginia)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">us-east-2</code> (Ohio)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">us-west-1</code> (N. California)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">us-west-2</code> (Oregon)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ca-central-1</code> (Canada)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ca-west-1</code> (Calgary)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-central-1</code> (Frankfurt)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-central-2</code> (Zurich)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-north-1</code> (Stockholm)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-south-1</code> (Milan)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-south-2</code> (Spain)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-west-1</code> (Ireland)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-west-2</code> (London)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">eu-west-3</code> (Paris)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-east-2</code> (Taipei)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-northeast-1</code> (Tokyo)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-northeast-2</code> (Seoul)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-northeast-3</code> (Osaka)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-south-1</code> (Mumbai)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-south-2</code> (Hyderabad)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-southeast-1</code> (Singapore)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-southeast-2</code> (Sydney)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-southeast-3</code> (Jakarta)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-southeast-4</code> (Melbourne)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-southeast-5</code> (Malaysia)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-southeast-6</code> (New Zealand)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">ap-southeast-7</code> (Thailand)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">il-central-1</code> (Tel Aviv)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">me-central-1</code> (UAE)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">me-south-1</code> (Bahrain)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">af-south-1</code> (Cape Town)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+     <tr><td tabindex="-1"><code class="code">sa-east-1</code> (São Paulo)</td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-no.png" alt="Red circle with white X icon indicating error, cancel, or close action." style="max-width:10px" height="10px" /></td><td align="center" style="text-align: center;" tabindex="-1"><img src="/images/bedrock/latest/userguide/images/icons/icon-yes.png" alt="Green circle with white checkmark icon." style="max-width:10px" height="10px" /></td></tr>
+    </table></div></div>
+
+  
+  <h2 id="model-card-openai-gpt-56-luna-quotas">Quotas and Limits</h2>
+  <p>Your AWS account has default quotas to maintain the performance of the service and to ensure appropriate usage of Amazon Bedrock. The default quotas assigned to an account might be updated depending on regional factors, payment history, fraudulent usage, and/or approval of a quota <a href="quotas-increase.html" rel="noopener noreferrer" target="_blank">increase request</a>. For more information, see <a href="./quotas.html">Quotas for Amazon Bedrock</a> documentation and see the <a href="/general/latest/gr/bedrock.html#limits_bedrock" rel="noopener noreferrer" target="_blank">limits</a> for the model.</p>
+  <p>On the <code class="code">bedrock-runtime</code> endpoint, limits are managed as tokens per minute (TPM) with a 10x burndown rate, where 1 output token consumes 10 tokens.</p>
+  
+  <h2 id="model-card-openai-gpt-56-luna-sample-code">Sample Code</h2>
+  <p><b>Step 1 - AWS Account:</b> If you have an AWS account already, skip this step. If you are new to AWS, sign up for an <a href="https://portal.aws.amazon.com/billing/signup" rel="noopener noreferrer" target="_blank"><span>AWS account</span><awsui-icon class="awsdocs-link-icon" name="external"></awsui-icon></a>.</p>
+  <p><b>Step 2 - API key:</b> Go to the <a href="https://console.aws.amazon.com/bedrock/home#/api-keys/long-term/create" rel="noopener noreferrer" target="_blank"><span>Amazon Bedrock console</span><awsui-icon class="awsdocs-link-icon" name="external"></awsui-icon></a> and generate a long-term API key.</p>
+  <p><b>Step 3 - Get the SDK:</b> To use this getting started guide, you must have Python already installed. Then install the relevant software depending on the APIs you are using.</p>
+  <p>For both APIs, choose the OpenAI SDK tab.</p>
+  <awsdocs-tabs><dl style="display: none">
+   <dt>OpenAI SDK</dt><dd tab-id="openai-sdk">
+     <pre class="programlisting"><div class="code-btn-container"><div class="btn-copy-code" title="Copy"><awsui-icon name="copy"></awsui-icon></div></div><!--DEBUG: cli ()--><code class="">pip install openai</code></pre>
+    </dd>
+  </dl></awsdocs-tabs>
+   
+   <h3 id="model-card-openai-gpt-56-luna-sample-code-environment">Step 4 - Set environment variables</h3>
+   <p>Configure your environment to use the API key for authentication.</p>
+  <awsdocs-tabs><dl style="display: none">
+   <dt>bedrock-mantle</dt><dd tab-id="bedrock-mantle">
+     <pre class="programlisting"><div class="code-btn-container"><div class="btn-copy-code" title="Copy"><awsui-icon name="copy"></awsui-icon></div></div><!--DEBUG: cli ()--><code class="">OPENAI_API_KEY="&lt;provide your Bedrock API key&gt;"
+OPENAI_BASE_URL="https://bedrock-mantle.us-east-1.api.aws/openai/v1"</code></pre>
+    </dd>
+   <dt>bedrock-runtime</dt><dd tab-id="bedrock-runtime">
+     <pre class="programlisting"><div class="code-btn-container"><div class="btn-copy-code" title="Copy"><awsui-icon name="copy"></awsui-icon></div></div><!--DEBUG: cli ()--><code class="">OPENAI_API_KEY="&lt;provide your Bedrock API key&gt;"
+OPENAI_BASE_URL="https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1"</code></pre>
+    </dd>
+  </dl></awsdocs-tabs>
+  <div class="awsdocs-note"><div class="awsdocs-note-title"><awsui-icon name="status-info" variant="link"></awsui-icon><h6>Note</h6></div><div class="awsdocs-note-text"><p>On <code class="code">bedrock-runtime</code>, name a cross-Region inference profile as the model — <code class="code">us.openai.gpt-5.6-luna</code> or <code class="code">global.openai.gpt-5.6-luna</code>. This model is not available for in-Region inference on that endpoint. Your IAM identity also needs <code class="code">bedrock:InvokeModel</code> on your account's default project (<code class="code">arn:aws:bedrock:<span>{</span>region}:<span>{</span>account-id}:project/default</code>) in addition to the inference profile.</p></div></div>
+    
+   
+   <h3 id="model-card-openai-gpt-56-luna-sample-code-request">Step 5 - Run your first inference request</h3>
+   <p>Save the file as <code>bedrock-first-request.py</code></p>
+   
+   <h4 id="model-card-openai-gpt-56-luna-sample-code-mantle">bedrock-mantle</h4>
+   <p>Use the settings from <a href="#model-card-openai-gpt-56-luna-sample-code-environment">Step 4 - Set environment variables</a>. Choose the <code class="code">bedrock-mantle</code> tab. The Chat tab uses the Chat Completions API.</p>
+   <awsdocs-tabs><dl style="display: none">
+    <dt>Responses API</dt><dd tab-id="responses-api">
+     <pre class="programlisting"><div class="code-btn-container"><div class="btn-copy-code" title="Copy"><awsui-icon name="copy"></awsui-icon></div></div><!--DEBUG: cli (python)--><code class="python ">from openai import OpenAI
+
+client = OpenAI()
+
+response = client.responses.create(
+    model="openai.gpt-5.6-luna",
+    input="Can you explain the features of Amazon Bedrock?"
+)
+print(response)</code></pre>
+    </dd>
+    <dt>Chat</dt><dd tab-id="chat">
+     <pre class="programlisting"><div class="code-btn-container"><div class="btn-copy-code" title="Copy"><awsui-icon name="copy"></awsui-icon></div></div><!--DEBUG: cli (python)--><code class="python ">from openai import OpenAI
+
+client = OpenAI()
+
+response = client.chat.completions.create(
+    model="openai.gpt-5.6-luna",
+    messages=[<span>{</span>"role": "user", "content": "Can you explain the features of Amazon Bedrock?"}]
+)
+print(response)</code></pre>
+    </dd>
+   </dl></awsdocs-tabs>
+   
+   
+   <h4 id="model-card-openai-gpt-56-luna-sample-code-runtime-openai">bedrock-runtime: OpenAI SDK</h4>
+   <p>Use the settings from <a href="#model-card-openai-gpt-56-luna-sample-code-environment">Step 4 - Set environment variables</a>. Choose the <code class="code">bedrock-runtime</code> tab. Send your request with the Responses API.</p>
+   <awsdocs-tabs><dl style="display: none">
+    <dt>Responses API</dt><dd tab-id="responses-api">
+     <pre class="programlisting"><div class="code-btn-container"><div class="btn-copy-code" title="Copy"><awsui-icon name="copy"></awsui-icon></div></div><!--DEBUG: cli (python)--><code class="python ">from openai import OpenAI
+
+client = OpenAI()
+
+response = client.responses.create(
+    model="us.openai.gpt-5.6-luna",
+    input="Can you explain the features of Amazon Bedrock?"
+)
+print(response)</code></pre>
+    </dd>
+   </dl></awsdocs-tabs>
+   
+   
+ <awsdocs-copyright class="copyright-print"></awsdocs-copyright><awsdocs-thumb-feedback right-edge="{{$ctrl.thumbFeedbackRightEdge}}"></awsdocs-thumb-feedback></div><noscript><div><div><div><div id="js_error_message"><p><img src="https://d1ge0kk1l5kms0.cloudfront.net/images/G/01/webservices/console/warning.png" alt="Warning" /> <strong>Javascript is disabled or is unavailable in your browser.</strong></p><p>To use the Amazon Web Services Documentation, Javascript must be enabled. Please refer to your browser's Help pages for instructions.</p></div></div></div></div></noscript><div id="main-col-footer" class="awsui-util-font-size-0"><div id="doc-conventions"><a target="_top" href="/general/latest/gr/docconventions.html">Document Conventions</a></div><div class="prev-next"><div id="previous" class="prev-link" accesskey="p" href="./model-card-openai-gpt-56-terra.html">GPT-5.6 Terra</div><div id="next" class="next-link" accesskey="n" href="./model-card-openai-gpt-56-cyber.html">Daybreak Red: GPT-5.6 Cyber</div></div></div><awsdocs-page-utilities></awsdocs-page-utilities></div><div id="quick-feedback-yes" style="display: none;"><div class="title">Did this page help you? - Yes</div><div class="content"><p>Thanks for letting us know we're doing a good job!</p><p>If you've got a moment, please tell us what we did right so we can do more of it.</p><p><awsui-button id="fblink" rel="noopener noreferrer" target="_blank" text="Feedback" click="linkClick($event)" href="https://docs.aws.amazon.com/forms/aws-doc-feedback?feedback_destination_id=2d8c2a09-1dac-41bf-9893-c0333d272b2c&amp;topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html"></awsui-button></p></div></div><div id="quick-feedback-no" style="display: none;"><div class="title">Did this page help you? - No</div><div class="content"><p>Thanks for letting us know this page needs work. We're sorry we let you down.</p><p>If you've got a moment, please tell us how we can make the documentation better.</p><p><awsui-button id="fblink" rel="noopener noreferrer" target="_blank" text="Feedback" click="linkClick($event)" href="https://docs.aws.amazon.com/forms/aws-doc-feedback?feedback_destination_id=2d8c2a09-1dac-41bf-9893-c0333d272b2c&amp;topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-card-openai-gpt-56-luna.html"></awsui-button></p></div></div></div></body></div></awsdocs-view><div class="page-loading-indicator" id="page-loading-indicator"><awsui-spinner size="large"></awsui-spinner></div></div><div id="tools-panel" dom-region="tools"><awsdocs-tools-panel id="awsdocs-tools-panel"></awsdocs-tools-panel></div></awsui-app-layout><awsdocs-cookie-banner class="doc-cookie-banner"></awsdocs-cookie-banner></div></body></html>

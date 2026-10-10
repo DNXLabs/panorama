@@ -1,0 +1,147 @@
+---
+title: What Panorama is
+description: >-
+  What happens to a request, what you get from it, the three commitments
+  Panorama holds, which coding tools it works with, and where the project is.
+sidebar:
+  order: 1
+---
+
+import ThemeImage from '../../../components/ThemeImage.astro';
+import flowDark from '../../../assets/diagrams/request-flow-dark.png';
+import flowLight from '../../../assets/diagrams/request-flow-light.png';
+import analyticsSpendDark from '../../../assets/console/analytics-spend-dark.webp';
+import analyticsSpendLight from '../../../assets/console/analytics-spend-light.webp';
+
+
+Panorama is a gateway that sits between your engineers' coding tools and
+Amazon Bedrock. It is one container that runs in your own infrastructure.
+
+Engineers point Claude Code, opencode or Codex CLI at it instead of at a model
+provider. You get sign-in, budgets and a say in which models are used. You also
+get the part nothing else does: **what each branch, ticket and pull request
+cost**, because Panorama reads that context out of the traffic as it passes.
+Engineers install nothing and configure nothing for that to work.
+
+## What happens to a request
+
+<ThemeImage
+  dark={flowDark}
+  light={flowLight}
+  alt="A request leaves a coding tool on an engineer's laptop and enters Panorama, which authenticates the token, resolves the route name to a model, checks budgets, and reads the branch, ticket and pull request in flight. The request is then streamed to Amazon Bedrock in your AWS account. Only metadata is written to the database. The console and the background jobs sit off the request path."
+/>
+
+1. **Authenticate.** The tool sends a gateway token. Panorama knows who is
+   asking before it reads anything else.
+2. **Resolve the route.** The tool asks for a *route*, a name you made up such
+   as `standard`. You decide which model that name runs on. An engineer never
+   names a model.
+3. **Check budgets.** The person's, their team's, and the organization's.
+4. **Read the work context.** The repository, branch, ticket and pull request
+   are matched out of the request body in flight. The body is then discarded.
+
+The response streams straight back. Nothing on that path buffers it, and
+nothing on it touches the database.
+
+If those words are new, [Concepts](/docs/start/concepts/) defines each one in a
+sentence.
+
+<ThemeImage
+  frame
+  dark={analyticsSpendDark}
+  light={analyticsSpendLight}
+  alt="The Analytics screen. Two headline figures side by side: spend over 30 days against the monthly cap, and the share of that spend attributed to work, 67 percent, with the unattributed remainder stated beside it. Under them, request count, cost per work item, active developers and a chart of daily spend."
+  caption="Analytics, the console's first screen. The two questions it answers: are we on budget, and is the spend attached to real work."
+/>
+
+## What you get
+
+| | |
+| --- | --- |
+| **One governed endpoint** | Every request is authenticated, checked against a budget, sent to a model you chose, and recorded. |
+| **Cost you can trust** | Input, output, cache read and cache write are priced separately, per model and per region. A coding agent is mostly cache reads: price them as input and you overstate the bill several-fold. |
+| **Cost per branch, ticket and PR** | Read from the request in flight, then confirmed against GitHub (experimental). "PAY-1183 cost $18.40, merged." |
+| **Budgets that hold** | Per person, per team, per deployment, by day, week or month. A soft limit warns and closes the routes you marked as too expensive to keep serving, and tells the engineer which routes still work. A hard limit stops the request and says when it resets. |
+| **Single sign-on** | Generic OIDC for the console. Roles come from your identity provider's groups. |
+| **A credential engineers mint themselves** | A gateway token from the **My setup** screen, revocable, good for 30 days. |
+
+## Three things it will never do
+
+These are product commitments, not defaults. A change that breaks one does not
+get merged.
+
+1. **Store a prompt or a response.** Bodies are pattern-matched in flight and
+   discarded. Only the extracted metadata is kept. There is no audit-log
+   option, debug mode or flag that changes this, and the extraction rules are
+   open source so you can check the claim.
+2. **Show one engineer another engineer's numbers.** Per-person spend exists,
+   and is visible to administrators and to the managers of that person's
+   teams, because whoever pays the bill needs cost per seat. No screen, API,
+   export or dashboard shows one developer another developer's usage.
+3. **Hide what it could not attribute.** Unattributed spend is shown beside
+   attributed spend everywhere the two appear. An honest 70% beats a false
+   100%.
+
+And one for the request path: **streaming is never buffered.** The target is
+under 10ms added to time-to-first-token. See
+[The hot path](/docs/internals/hot-path/).
+
+## Which coding tools it works with
+
+| Tool | Status |
+| --- | --- |
+| [Claude Code](/docs/engineers/claude-code/) | Supported. Attributes work down to the branch and ticket. |
+| [opencode](/docs/engineers/opencode/) | Supported. Attributes work to the repository, not the branch. |
+| [Codex CLI](/docs/engineers/codex/) | Supported, over the Responses API. |
+| Cline, Continue | They speak an API the gateway serves, and are not set up from the console or covered by the test suite yet. |
+| Gemini CLI | Not supported. It speaks Google's API, which the gateway does not serve. |
+| GitHub Copilot | Cannot be proxied. It offers no way to point it elsewhere. |
+| Cursor | Partial. Its agent traffic does not go through a custom endpoint, so only part of its spend would be seen. |
+
+## Status
+
+**Pre-release.** The gateway, pricing, budgets, routing, attribution, the
+console and engineer onboarding are built. It has not been through a production
+deployment yet.
+
+Worth knowing before you plan around it:
+
+- **The GitHub integration is experimental.** It is built and has not yet been
+  tested against a real GitHub organization. See
+  [GitHub integration](/docs/configure/integrations/).
+- **Command-line sign-in is built and switched off** in this release. Engineers
+  use a 30-day token they mint in the console. See
+  [Credentials](/docs/reference/credentials/).
+- **The console needs single sign-on.** Without an identity provider, a
+  one-time setup code opens the part of the console that configures sign-in and
+  model providers, and nothing more. Routes, budgets, analytics and My setup
+  need an account, so the [Quickstart](/docs/start/try-it/) connects an
+  identity provider first.
+- **SAML is not implemented.** AWS IAM Identity Center therefore does not work
+  as a sign-in provider. See [Single sign-on](/docs/configure/sso/).
+- **Jira is not in v1**, and neither is a Helm chart.
+- **Service tokens for CI are created through the API.** There is no screen
+  for them yet.
+
+## Licensing
+
+Panorama is sponsored and maintained by [DNX Solutions](https://www.dnx.solutions).
+
+**AGPL-3.0-only.** The open-source edition is complete for a single organization:
+the full gateway, policy engine, analytics, attribution and SSO. Nothing is
+gated, and nothing stops working until you pay.
+
+An enterprise edition covering multi-organization management, audit export and
+billed-spend precision from the AWS Cost and Usage Report is planned, under a
+separate commercial licence. No enterprise code exists yet, and nothing in the
+open-source edition will move behind it.
+
+SAML is *not* an enterprise feature. For providers like AWS IAM Identity Center
+it is the only way to sign in at all, so gating it would gate SSO. When it is
+built, it lands in the open-source edition.
+
+Contributions require a signed CLA.
+
+This manual is licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); code samples in it
+are part of Panorama and licensed under AGPL-3.0-only.

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+    <html xmlns="http://www.w3.org/1999/xhtml" lang="en-US"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>Models at a glance - Amazon Bedrock</title><meta name="viewport" content="width=device-width,initial-scale=1" /><meta name="assets_root" content="/assets" /><meta name="target_state" content="model-cards" /><meta name="default_state" content="model-cards" /><link rel="icon" type="image/ico" href="/assets/images/favicon.ico" /><link rel="shortcut icon" type="image/ico" href="/assets/images/favicon.ico" /><link rel="canonical" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards.html" /><meta name="description" content="With access to hundreds of top foundation models (FMs) to power your applications and the ability to swap them in and out without rewriting code, Amazon Bedrock gives you the flexibility to build and innovate as your needs evolve." /><meta name="deployment_region" content="IAD" /><meta name="product" content="Amazon Bedrock" /><meta name="guide" content="User Guide" /><meta name="abstract" content="User Guide for the Amazon Bedrock service." /><meta name="guide-locale" content="en_us" /><meta name="tocs" content="toc-contents.json" /><link rel="canonical" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards.html" /><link rel="alternate" href="https://docs.aws.amazon.com/id_id/bedrock/latest/userguide/model-cards.html" hreflang="id-id" /><link rel="alternate" href="https://docs.aws.amazon.com/id_id/bedrock/latest/userguide/model-cards.html" hreflang="id" /><link rel="alternate" href="https://docs.aws.amazon.com/de_de/bedrock/latest/userguide/model-cards.html" hreflang="de-de" /><link rel="alternate" href="https://docs.aws.amazon.com/de_de/bedrock/latest/userguide/model-cards.html" hreflang="de" /><link rel="alternate" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards.html" hreflang="en-us" /><link rel="alternate" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards.html" hreflang="en" /><link rel="alternate" href="https://docs.aws.amazon.com/es_es/bedrock/latest/userguide/model-cards.html" hreflang="es-es" /><link rel="alternate" href="https://docs.aws.amazon.com/es_es/bedrock/latest/userguide/model-cards.html" hreflang="es" /><link rel="alternate" href="https://docs.aws.amazon.com/fr_fr/bedrock/latest/userguide/model-cards.html" hreflang="fr-fr" /><link rel="alternate" href="https://docs.aws.amazon.com/fr_fr/bedrock/latest/userguide/model-cards.html" hreflang="fr" /><link rel="alternate" href="https://docs.aws.amazon.com/it_it/bedrock/latest/userguide/model-cards.html" hreflang="it-it" /><link rel="alternate" href="https://docs.aws.amazon.com/it_it/bedrock/latest/userguide/model-cards.html" hreflang="it" /><link rel="alternate" href="https://docs.aws.amazon.com/ja_jp/bedrock/latest/userguide/model-cards.html" hreflang="ja-jp" /><link rel="alternate" href="https://docs.aws.amazon.com/ja_jp/bedrock/latest/userguide/model-cards.html" hreflang="ja" /><link rel="alternate" href="https://docs.aws.amazon.com/ko_kr/bedrock/latest/userguide/model-cards.html" hreflang="ko-kr" /><link rel="alternate" href="https://docs.aws.amazon.com/ko_kr/bedrock/latest/userguide/model-cards.html" hreflang="ko" /><link rel="alternate" href="https://docs.aws.amazon.com/pt_br/bedrock/latest/userguide/model-cards.html" hreflang="pt-br" /><link rel="alternate" href="https://docs.aws.amazon.com/pt_br/bedrock/latest/userguide/model-cards.html" hreflang="pt" /><link rel="alternate" href="https://docs.aws.amazon.com/zh_cn/bedrock/latest/userguide/model-cards.html" hreflang="zh-cn" /><link rel="alternate" href="https://docs.aws.amazon.com/zh_tw/bedrock/latest/userguide/model-cards.html" hreflang="zh-tw" /><link rel="alternate" href="https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards.html" hreflang="x-default" /><meta name="feedback-folder" content="2d8c2a09-1dac-41bf-9893-c0333d272b2c" /><meta name="feedback-item" content="Bedrock" /><meta name="this_doc_product" content="Amazon Bedrock" /><meta name="this_doc_guide" content="User Guide" /><head xmlns="http://www.w3.org/1999/xhtml"> <script defer="" src="/assets/r/awsdocs-doc-page.2.0.0.js"></script><link href="/assets/r/awsdocs-doc-page.2.0.0.css" rel="stylesheet"/></head>
+<script defer="" id="awsc-panorama-bundle" type="text/javascript" src="https://prod.pa.cdn.uis.awsstatic.com/panorama-nav-init.js" data-config="{'appEntity':'aws-documentation','region':'us-east-1','service':'bedrock'}"></script><meta id="panorama-serviceSubSection" value="User Guide" /><meta id="panorama-serviceConsolePage" value="Models at a glance" /></head><body class="awsdocs awsui"><div class="awsdocs-container"><p><a href="model-cards.md">View a markdown version of this page</a></p><awsdocs-header></awsdocs-header><awsui-app-layout id="app-layout" class="awsui-util-no-gutters" ng-controller="ContentController as $ctrl" header-selector="awsdocs-header" navigation-hide="false" navigation-width="$ctrl.navWidth" navigation-open="$ctrl.navOpen" navigation-change="$ctrl.onNavChange($event)" tools-hide="$ctrl.hideTools" tools-width="$ctrl.toolsWidth" tools-open="$ctrl.toolsOpen" tools-change="$ctrl.onToolsChange($event)"><div id="guide-toc" dom-region="navigation"><awsdocs-toc></awsdocs-toc></div><div id="main-column" dom-region="content" tabindex="-1"><awsdocs-view class="awsdocs-view"><div id="awsdocs-content"><head><title>Models at a glance - Amazon Bedrock</title><meta name="pdf" content="/pdfs/bedrock/latest/userguide/bedrock-ug.pdf#model-cards" /><meta name="rss" content="bedrock-ug.rss" /><meta name="forums" content="https://repost.aws/tags/TAQeKlaPaNRQ2tWB6P7KrMag" /><meta name="feedback" content="https://docs.aws.amazon.com/forms/aws-doc-feedback?feedback_destination_id=2d8c2a09-1dac-41bf-9893-c0333d272b2c&amp;topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-cards.html" /><meta name="feedback-yes" content="feedbackyes.html?topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-cards.html" /><meta name="feedback-no" content="feedbackno.html?topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-cards.html" /><meta name="keywords" content="Amazon Bedrock,bedrock" /><link rel="alternate" type="text/markdown" href="model-cards.md" title="Markdown version" /><script type="application/ld+json">
+{
+    "@context" : "https://schema.org",
+    "@type" : "BreadcrumbList",
+    "itemListElement" : [
+      {
+        "@type" : "ListItem",
+        "position" : 1,
+        "name" : "AWS",
+        "item" : "https://aws.amazon.com"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 2,
+        "name" : "Amazon Bedrock",
+        "item" : "https://docs.aws.amazon.com/bedrock/index.html"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 3,
+        "name" : "User Guide",
+        "item" : "https://docs.aws.amazon.com/bedrock/latest/userguide"
+      },
+      {
+        "@type" : "ListItem",
+        "position" : 4,
+        "name" : "Models at a glance",
+        "item" : "https://docs.aws.amazon.com/bedrock/latest/userguide/model-cards.html"
+      }
+    ]
+}
+</script></head><body><div id="main"><div style="display: none"><a href="/pdfs/bedrock/latest/userguide/bedrock-ug.pdf#model-cards" target="_blank" rel="noopener noreferrer" title="Open PDF"></a></div><div id="breadcrumbs" class="breadcrumb"><a href="/index.html">Documentation</a><a href="/bedrock/index.html">Amazon Bedrock</a><a href="what-is-bedrock.html">User Guide</a></div><div id="page-toc-src"><a href="#models-supported-overview">Models supported</a></div><div id="main-content" class="awsui-util-container"><div id="main-col-body"><awsdocs-language-banner data-service="$ctrl.pageService"></awsdocs-language-banner><h1 class="topictitle" id="model-cards">Models at a glance</h1><div class="awsdocs-page-header-container"><awsdocs-page-header></awsdocs-page-header><awsdocs-filter-selector id="awsdocs-filter-selector"></awsdocs-filter-selector></div><p>With access to hundreds of top foundation models (FMs) to power your applications and the ability to swap them in and out without rewriting code, Amazon Bedrock gives you the flexibility to build and innovate as your needs evolve.</p><h2 id="models-supported-overview">Models supported</h2>
+  
+  
+  <div class="table-container"><div class="table-contents"><table id="w626aac11b4b2"><thead>
+     <tr>
+      <th>Logo</th>
+      <th>Provider</th>
+      <th>Supported models</th>
+     </tr>
+    </thead>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/ai21.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="AI21 Labs logo with pink and black text." data-alt-text-source="generated" style="max-width:75%" />
+         
+         
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-ai21-labs.html">AI21 Labs</a></td>
+      <td tabindex="-1"><p><a href="./model-card-ai21-labs-jamba-1-5-large.html">Jamba 1.5 Large</a>, <a href="./model-card-ai21-labs-jamba-1-5-mini.html">Jamba 1.5 Mini</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/nova2pro.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Amazon logo with curved arrow from A to Z forming a smile." style="max-width:75%" />
+         
+     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-amazon.html">Amazon</a></td>
+      <td tabindex="-1"><p><a href="./model-card-amazon-amazon-nova-multimodal-embeddings.html">Amazon Nova Multimodal Embeddings</a>, <a href="./model-card-amazon-nova-2-lite.html">Nova 2 Lite</a>, <a href="./model-card-amazon-nova-2-sonic.html">Nova 2 Sonic</a>, <a href="./model-card-amazon-nova-canvas.html">Nova Canvas</a>, <a href="./model-card-amazon-nova-lite.html">Nova Lite</a>, <a href="./model-card-amazon-nova-micro.html">Nova Micro</a>, <a href="./model-card-amazon-nova-premier.html">Nova Premier</a>, <a href="./model-card-amazon-nova-pro.html">Nova Pro</a>, <a href="./model-card-amazon-nova-reel.html">Nova Reel</a>, <a href="./model-card-amazon-nova-sonic.html">Nova Sonic</a>, <a href="./model-card-amazon-titan-embeddings-g1---text.html">Titan Embeddings G1 - Text</a>, <a href="./model-card-amazon-titan-image-generator-g1-v2.html">Titan Image Generator G1 v2</a>, <a href="./model-card-amazon-titan-multimodal-embeddings-g1.html">Titan Multimodal Embeddings G1</a>, <a href="./model-card-amazon-titan-text-embeddings-v2.html">Titan Text Embeddings V2</a>, <a href="./model-card-amazon-titan-text-embeddings-v2-2.html">Titan Embeddings G1 - Text v2</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/claude.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Orange rounded square icon with white radial loading spinner design." data-alt-text-source="generated" style="max-width:75%" />
+         
+         
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-anthropic.html">Anthropic</a></td>
+      <td tabindex="-1">
+       <p><b>Claude 5.x:</b> <a href="./model-card-anthropic-claude-fable-5-1.html">Claude Fable 5.1</a>, <a href="./model-card-anthropic-claude-mythos-5-1.html">Claude Mythos 5.1</a>, <a href="./model-card-anthropic-claude-opus-5.html">Claude Opus 5</a>, <a href="./model-card-anthropic-claude-sonnet-5.html">Claude Sonnet 5</a>, <a href="./model-card-anthropic-claude-mythos-5.html">Claude Mythos 5</a>, <a href="./model-card-anthropic-claude-fable-5.html">Claude Fable 5</a></p>
+       <p><b>Claude 4.x:</b> <a href="./model-card-anthropic-claude-opus-4-8.html">Claude Opus 4.8</a>, <a href="./model-card-anthropic-claude-opus-4-7.html">Claude Opus 4.7</a>, <a href="./model-card-anthropic-claude-opus-4-6.html">Claude Opus 4.6</a>, <a href="./model-card-anthropic-claude-sonnet-4-6.html">Claude Sonnet 4.6</a>, <a href="./model-card-anthropic-claude-haiku-4-5.html">Claude Haiku 4.5</a>, <a href="./model-card-anthropic-claude-opus-4-5.html">Claude Opus 4.5</a>, <a href="./model-card-anthropic-claude-sonnet-4-5.html">Claude Sonnet 4.5</a>, <a href="./model-card-anthropic-claude-sonnet-4.html">Claude Sonnet 4</a>, <a href="./model-card-anthropic-claude-opus-4-1.html">Claude Opus 4.1</a></p>
+       <p><b>Claude 3.x:</b> <a href="./model-card-anthropic-claude-3-5-haiku.html">Claude 3.5 Haiku</a>, <a href="./model-card-anthropic-claude-3-haiku.html">Claude 3 Haiku</a></p>
+      </td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/cohere.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Cohere logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-cohere.html">Cohere</a></td>
+      <td tabindex="-1"><p><a href="./model-card-cohere-rerank-3-5.html">Rerank 3.5</a>, <a href="./model-card-cohere-command-r.html">Command R</a>, <a href="./model-card-cohere-command-r-plus.html">Command R+</a>, <a href="./model-card-cohere-embed-english.html">Embed English</a>, <a href="./model-card-cohere-embed-multilingual.html">Embed Multilingual</a>, <a href="./model-card-cohere-embed-v4.html">Embed v4</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/deepseek.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="DeepSeek logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-deepseek.html">DeepSeek</a></td>
+      <td tabindex="-1"><p><a href="./model-card-deepseek-deepseek-v3-2.html">DeepSeek V3.2</a>, <a href="./model-card-deepseek-deepseek-v3-1.html">DeepSeek-V3.1</a>, <a href="./model-card-deepseek-deepseek-r1.html">DeepSeek-R1</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/google.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Google logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-google.html">Google</a></td>
+      <td tabindex="-1"><p><b>Gemma 4:</b> <a href="./model-card-google-gemma-4-31b.html">Gemma 4 31B</a>, <a href="./model-card-google-gemma-4-26b-a4b.html">Gemma 4 26B-A4B</a>, <a href="./model-card-google-gemma-4-e2b.html">Gemma 4 E2B</a>; <b>Gemma 3:</b> <a href="./model-card-google-gemma-3-12b-it.html">Gemma 3 12B IT</a>, <a href="./model-card-google-gemma-3-27b-pt.html">Gemma 3 27B PT</a>, <a href="./model-card-google-gemma-3-4b-it.html">Gemma 3 4B IT</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/meta.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Meta logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-meta.html">Meta</a></td>
+      <td tabindex="-1"><p><b>Meta 3.x:</b> <a href="./model-card-meta-llama-3-3-70b-instruct.html">Llama 3.3 70B Instruct</a>, <a href="./model-card-meta-llama-3-2-11b-instruct.html">Llama 3.2 11B Instruct</a>, <a href="./model-card-meta-llama-3-2-1b-instruct.html">Llama 3.2 1B Instruct</a>, <a href="./model-card-meta-llama-3-2-3b-instruct.html">Llama 3.2 3B Instruct</a>, <a href="./model-card-meta-llama-3-2-90b-instruct.html">Llama 3.2 90B Instruct</a>, <a href="./model-card-meta-llama-3-1-405b-instruct.html">Llama 3.1 405B Instruct</a>, <a href="./model-card-meta-llama-3-1-70b-instruct.html">Llama 3.1 70B Instruct</a>, <a href="./model-card-meta-llama-3-1-8b-instruct.html">Llama 3.1 8B Instruct</a>; <a href="./model-card-meta-llama-3-70b-instruct.html">Llama 3 70B Instruct</a>, <a href="./model-card-meta-llama-3-8b-instruct.html">Llama 3 8B Instruct</a>, <a href="./model-card-meta-llama-4-maverick-17b-instruct.html">Llama 4 Maverick 17B Instruct</a>, <a href="./model-card-meta-llama-4-scout-17b-instruct.html">Llama 4 Scout 17B Instruct</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/minimax2.1.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="MiniMax logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-minimax.html">MiniMax</a></td>
+      <td tabindex="-1"><p><a href="./model-card-minimax-minimax-m2-5.html">MiniMax M2.5</a>, <a href="./model-card-minimax-minimax-m2-1.html">MiniMax M2.1</a>, <a href="./model-card-minimax-minimax-m2.html">MiniMax M2</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/mistralai.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Mistral AI logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-mistral-ai.html">Mistral AI</a></td>
+      <td tabindex="-1"><p><a href="./model-card-mistral-ai-ministral-14b-3-0.html">Ministral 14B 3.0</a>, <a href="./model-card-mistral-ai-devstral-2-123b.html">Devstral 2 123B</a>, <a href="./model-card-mistral-ai-magistral-small-2509.html">Magistral Small 2509</a>, <a href="./model-card-mistral-ai-ministral-3-8b.html">Ministral 3 8B</a>, <a href="./model-card-mistral-ai-ministral-3b.html">Ministral 3B</a>, <a href="./model-card-mistral-ai-mistral-7b-instruct.html">Mistral 7B Instruct</a>, <a href="./model-card-mistral-ai-mistral-large.html">Mistral Large</a>, <a href="./model-card-mistral-ai-mistral-large-3.html">Mistral Large 3</a>, <a href="./model-card-mistral-ai-mistral-small.html">Mistral Small</a>, <a href="./model-card-mistral-ai-mixtral-8x7b-instruct.html">Mixtral 8x7B Instruct</a>, <a href="./model-card-mistral-ai-pixtral-large.html">Pixtral Large</a>, <a href="./model-card-mistral-ai-voxtral-mini-3b-2507.html">Voxtral Mini 3B 2507</a>, <a href="./model-card-mistral-ai-voxtral-small-24b-2507.html">Voxtral Small 24B 2507</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/kimik2.5.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Moonshot AI Kimi logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-moonshot-ai.html">Moonshot AI</a></td>
+      <td tabindex="-1"><p><a href="./model-card-moonshot-ai-kimi-k3.html">Kimi K3</a>, <a href="./model-card-moonshot-ai-kimi-k2-5.html">Kimi K2.5</a>, <a href="./model-card-moonshot-ai-kimi-k2-thinking.html">Kimi K2 Thinking</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/nvidia.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="NVIDIA logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-nvidia.html">NVIDIA</a></td>
+      <td tabindex="-1"><p><a href="./model-card-nvidia-nvidia-nemotron-nano-12b-v2-vl-bf16.html">NVIDIA Nemotron Nano 12B v2 VL BF16</a>, <a href="./model-card-nvidia-nvidia-nemotron-nano-9b-v2.html">NVIDIA Nemotron Nano 9B v2</a>, <a href="./model-card-nvidia-nemotron-nano-3-30b.html">Nemotron Nano 3 30B</a>, <a href="./model-card-nvidia-nemotron-super-3-120b.html">NVIDIA Nemotron 3 Super 120B</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/openai.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="OpenAI logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-openai.html">OpenAI</a></td>
+      <td tabindex="-1"><p><a href="./model-card-openai-gpt-6-astra.html">GPT-6 Astra</a>, <a href="./model-card-openai-gpt-56-sol.html">GPT-5.6 Sol</a>, <a href="./model-card-openai-gpt-56-terra.html">GPT-5.6 Terra</a>, <a href="./model-card-openai-gpt-56-luna.html">GPT-5.6 Luna</a>, <a href="./model-card-openai-gpt-56-cyber.html">Daybreak Red: GPT-5.6 Cyber</a>, <a href="./model-card-openai-gpt-daybreak-blue-56-sol.html">Daybreak Blue: GPT-5.6 Sol</a>, <a href="./model-card-openai-gpt-55.html">GPT-5.5</a>, <a href="./model-card-openai-gpt-54.html">GPT-5.4</a>, <a href="./model-card-openai-gpt-oss-safeguard-120b.html">GPT OSS Safeguard 120B</a>, <a href="./model-card-openai-gpt-oss-safeguard-20b.html">GPT OSS Safeguard 20B</a>, <a href="./model-card-openai-gpt-oss-120b.html">gpt-oss-120b</a>, <a href="./model-card-openai-gpt-oss-20b.html">gpt-oss-20b</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/qwen.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Qwen logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-qwen.html">Qwen</a></td>
+      <td tabindex="-1"><p><a href="./model-card-qwen-qwen3-235b-a22b-2507.html">Qwen3 235B A22B 2507</a>, <a href="./model-card-qwen-qwen3-32b.html">Qwen3 32B</a>, <a href="./model-card-qwen-qwen3-coder-480b-a35b-instruct.html">Qwen3 Coder 480B A35B Instruct</a>, <a href="./model-card-qwen-qwen3-coder-next.html">Qwen3 Coder Next</a>, <a href="./model-card-qwen-qwen3-next-80b-a3b.html">Qwen3 Next 80B A3B</a>, <a href="./model-card-qwen-qwen3-vl-235b-a22b.html">Qwen3 VL 235B A22B</a>, <a href="./model-card-qwen-qwen3-coder-30b-a3b-instruct.html">Qwen3-Coder-30B-A3B-Instruct</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/stability.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Stability AI logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-stability-ai.html">Stability AI</a></td>
+      <td tabindex="-1"><p><a href="./model-card-stability-ai-stable-image-conservative-upscale.html">Stable Image Conservative Upscale</a>, <a href="./model-card-stability-ai-stable-image-control-sketch.html">Stable Image Control Sketch</a>, <a href="./model-card-stability-ai-stable-image-control-structure.html">Stable Image Control Structure</a>, <a href="./model-card-stability-ai-stable-image-creative-upscale.html">Stable Image Creative Upscale</a>, <a href="./model-card-stability-ai-stable-image-erase-object.html">Stable Image Erase Object</a>, <a href="./model-card-stability-ai-stable-image-fast-upscale.html">Stable Image Fast Upscale</a>, <a href="./model-card-stability-ai-stable-image-inpaint.html">Stable Image Inpaint</a>, <a href="./model-card-stability-ai-stable-image-outpaint.html">Stable Image Outpaint</a>, <a href="./model-card-stability-ai-stable-image-remove-background.html">Stable Image Remove Background</a>, <a href="./model-card-stability-ai-stable-image-search-and-recolor.html">Stable Image Search and Recolor</a>, <a href="./model-card-stability-ai-stable-image-search-and-replace.html">Stable Image Search and Replace</a>, <a href="./model-card-stability-ai-stable-image-style-guide.html">Stable Image Style Guide</a>, <a href="./model-card-stability-ai-stable-image-style-transfer.html">Stable Image Style Transfer</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/twelvelabs.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Twelve Labs logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-twelvelabs.html">TwelveLabs</a></td>
+      <td tabindex="-1"><p><a href="./model-card-twelvelabs-marengo-embed-3-0.html">Marengo Embed 3.0</a>, <a href="./model-card-twelvelabs-marengo-embed-v2-7.html">Marengo Embed v2.7</a>, <a href="./model-card-twelvelabs-pegasus-v1-2.html">Pegasus v1.2</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/writer.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Writer logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-writer.html">Writer</a></td>
+      <td tabindex="-1"><p><a href="./model-card-writer-palmyra-x4.html">Palmyra X4</a>, <a href="./model-card-writer-palmyra-x5.html">Palmyra X5</a>, <a href="./model-card-writer-palmyra-vision-7b.html">Palmyra Vision 7B</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/xai.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="xAI logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-xai.html">xAI</a></td>
+      <td tabindex="-1"><p><a href="./model-card-xai-grok-4-3.html">Grok 4.3</a></p><p><a href="./model-card-xai-grok-4-6.html">Grok 4.6</a></p></td>
+     </tr>
+     <tr>
+      <td align="center" style="text-align: center;" tabindex="-1">
+       <div class="mediaobject">
+         
+         <img src="/images/bedrock/latest/userguide/images/models/zai.png" class="aws-docs-img-whiteBg aws-docs-img-padding" alt="Z.ai logo." style="max-width:75%" />
+         
+                     
+       </div>
+      </td>
+      <td tabindex="-1"><a href="./model-cards-zai.html">Z.AI</a></td>
+      <td tabindex="-1"><p><a href="./model-card-zai-glm-4-7.html">GLM 4.7</a>, <a href="./model-card-zai-glm-4-7-flash.html">GLM 4.7 Flash</a>, <a href="./model-card-zai-glm-5.html">GLM 5</a></p></td>
+     </tr>
+    </table></div></div>
+ <awsdocs-copyright class="copyright-print"></awsdocs-copyright><awsdocs-thumb-feedback right-edge="{{$ctrl.thumbFeedbackRightEdge}}"></awsdocs-thumb-feedback></div><noscript><div><div><div><div id="js_error_message"><p><img src="https://d1ge0kk1l5kms0.cloudfront.net/images/G/01/webservices/console/warning.png" alt="Warning" /> <strong>Javascript is disabled or is unavailable in your browser.</strong></p><p>To use the Amazon Web Services Documentation, Javascript must be enabled. Please refer to your browser's Help pages for instructions.</p></div></div></div></div></noscript><div id="main-col-footer" class="awsui-util-font-size-0"><div id="doc-conventions"><a target="_top" href="/general/latest/gr/docconventions.html">Document Conventions</a></div><div class="prev-next"><div id="previous" class="prev-link" accesskey="p" href="./getting-started.html">Quickstart</div><div id="next" class="next-link" accesskey="n" href="./model-cards-ai21-labs.html">AI21 Labs</div></div></div><awsdocs-page-utilities></awsdocs-page-utilities></div><div id="quick-feedback-yes" style="display: none;"><div class="title">Did this page help you? - Yes</div><div class="content"><p>Thanks for letting us know we're doing a good job!</p><p>If you've got a moment, please tell us what we did right so we can do more of it.</p><p><awsui-button id="fblink" rel="noopener noreferrer" target="_blank" text="Feedback" click="linkClick($event)" href="https://docs.aws.amazon.com/forms/aws-doc-feedback?feedback_destination_id=2d8c2a09-1dac-41bf-9893-c0333d272b2c&amp;topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-cards.html"></awsui-button></p></div></div><div id="quick-feedback-no" style="display: none;"><div class="title">Did this page help you? - No</div><div class="content"><p>Thanks for letting us know this page needs work. We're sorry we let you down.</p><p>If you've got a moment, please tell us how we can make the documentation better.</p><p><awsui-button id="fblink" rel="noopener noreferrer" target="_blank" text="Feedback" click="linkClick($event)" href="https://docs.aws.amazon.com/forms/aws-doc-feedback?feedback_destination_id=2d8c2a09-1dac-41bf-9893-c0333d272b2c&amp;topic_url=https://docs.aws.amazon.com/en_us/bedrock/latest/userguide/model-cards.html"></awsui-button></p></div></div></div></body></div></awsdocs-view><div class="page-loading-indicator" id="page-loading-indicator"><awsui-spinner size="large"></awsui-spinner></div></div><div id="tools-panel" dom-region="tools"><awsdocs-tools-panel id="awsdocs-tools-panel"></awsdocs-tools-panel></div></awsui-app-layout><awsdocs-cookie-banner class="doc-cookie-banner"></awsdocs-cookie-banner></div></body></html>

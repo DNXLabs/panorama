@@ -1,0 +1,262 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# The price finder, after every merge.
+#
+# Adds a price for every model a provider can serve that the binary does not
+# already price, to the table every release embeds. Two rungs: a snapshot of
+# the AWS Price List API, and - for a model that API does not publish, which is
+# OpenAI's GPT-5.x on Bedrock - the model's card in the Bedrock user guide, read
+# by Claude and kept only when code has found every figure on the page. See
+# internal/pricefinder for what is checked.
+#
+# The table lives in S3 rather than in the repository, so a release cut from a
+# pull request's branch has it, and it never expires. It only grows: a model
+# already priced is never read again. A row that has gone stale is removed from
+# the object by hand, and the next run reads that model afresh.
+#
+# What the run could not price is a warning on the run and an issue, kept up to
+# date rather than opened again each time.
+name: Prices
+
+on:
+  push:
+    branches: [main]
+  # AWS adds models without anything merging here, so the table is also
+  # topped up once a week.
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One at a time. Two runs adding to the same object would each be adding to a
+# table the other had not seen; the upload below refuses to overwrite a newer
+# object anyway, and this keeps that refusal from being the normal case.
+concurrency:
+  group: prices
+  cancel-in-progress: false
+
+env:
+  # Repository variables, so the tree names no AWS account.
+  AWS_ROLE_ARN: ${{ vars.PRICES_ROLE_ARN }}
+  # Where the table lives. The bucket is versioned, so every table a release
+  # ever embedded can be read back by the version id the release records.
+  PRICES_BUCKET: ${{ vars.PRICES_BUCKET }}
+  PRICES_KEY: pricing/found_prices.json
+  PRICES_REGION: ${{ vars.PRICES_REGION }}
+  # The regions whose catalogues and price lists are read, comma separated.
+  #
+  # This decides which models are looked for, and nothing about their price:
+  # every region's catalogue lists a model's us. and global. profiles, the
+  # Price List publishes both rate sets in every region, and a model card
+  # states In-Region, Geo and Global side by side - so the ~10% between
+  # regional and global is read from any one region. The price table has no
+  # region in its key, so a second region adds no second price either.
+  #
+  # One region, then: us-east-1, where Bedrock launches models first and where
+  # Mantle serves GPT-5.x. Add a region only when a deployment uses one that
+  # offers a model us-east-1 does not. Each adds its catalogue and price-list
+  # reads to the run, and a region where a provider cannot be reached fails
+  # it, with the reason.
+  REGIONS: us-east-1
+  # The model that reads model cards, and where it is invoked.
+  #
+  # Haiku 4.5, as a trial: reading a price table off a page is a small job,
+  # and nothing it reports is kept until Verify has found it on the page, so
+  # a misread shows up as "did not check out" under Still unpriced in the run
+  # summary rather than as a wrong price in a release. If those reasons show
+  # it misreading cards a bigger model would not, change this to
+  # global.anthropic.claude-sonnet-5.
+  READER_MODEL: global.anthropic.claude-haiku-4-5-20251001-v1:0
+  READER_REGION: us-east-1
+
+jobs:
+  find:
+    name: Find prices
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Runs only where the repository variable PUBLISH is 'true': this
+    # repository and the public one, never a fork, which does not have it and
+    # sees the job skipped rather than failed. The guard is not the security
+    # boundary - the environment is, because the role's trust admits only this
+    # environment's subject - so a fork that sets the variable fails at the
+    # AWS login, which is the right outcome.
+    if: vars.PUBLISH == 'true'
+
+    # The role trusts this environment's subject, and the environment admits
+    # main only.
+    environment: aws-tests
+
+    permissions:
+      contents: read
+      # The OIDC trust with AWS.
+      id-token: write
+      # The "Models with no price" issue.
+      issues: write
+
+    steps:
+      - name: The variables are set
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in AWS_ROLE_ARN PRICES_BUCKET PRICES_REGION; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::repository variables not set for:$missing (see the env block of prices.yml)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.PRICES_REGION }}
+          role-session-name: panorama-prices-${{ github.run_id }}
+
+      # The table so far. A missing object is the first run; any other
+      # failure to read it stops here, because a run that started from an
+      # empty table would upload one that has forgotten every earlier row.
+      #
+      # The head is asked inside the `if` because Actions runs a step with
+      # `bash -e`: a failing command substitution in a plain assignment ends
+      # the step there, before anything can look at why, including on the 404
+      # this step exists to recognise.
+      - name: Read the table
+        id: previous
+        run: |
+          set -euo pipefail
+          if out=$(aws s3api head-object --bucket "$PRICES_BUCKET" --key "$PRICES_KEY" \
+            --region "$PRICES_REGION" --output json 2>&1); then
+            etag=$(printf '%s' "$out" | jq -r '.ETag')
+            aws s3api get-object --bucket "$PRICES_BUCKET" --key "$PRICES_KEY" \
+              --region "$PRICES_REGION" --if-match "$etag" previous.json > /dev/null || exit 1
+            echo "etag=$etag" >> "$GITHUB_OUTPUT"
+            echo "flag=-previous previous.json" >> "$GITHUB_OUTPUT"
+            echo "read s3://$PRICES_BUCKET/$PRICES_KEY ($(jq '.entries | length' previous.json) rows)"
+          elif printf '%s' "$out" | grep -q '(404)'; then
+            echo "no table yet at s3://$PRICES_BUCKET/$PRICES_KEY; this run starts one"
+            echo "etag=" >> "$GITHUB_OUTPUT"
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::could not read s3://$PRICES_BUCKET/$PRICES_KEY: $out"
+            exit 1
+          fi
+
+      # Exit 3 is a run that wrote its table but could not look at
+      # something. The table is still uploaded below - what it found is
+      # verified and only adds - and the job fails at the end, so the gap is
+      # red rather than a line nobody reads.
+      - name: Find prices
+        id: find
+        run: |
+          set -euo pipefail
+          status=0
+          go run ./cmd/pricefinder \
+            -regions "$REGIONS" \
+            -reader-region "$READER_REGION" \
+            -reader-model "$READER_MODEL" \
+            ${{ steps.previous.outputs.flag }} \
+            -out found_prices.json \
+            -report report.md \
+            -summary summary.json || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ $status -ne 0 ] && [ $status -ne 3 ]; then
+            exit $status
+          fi
+          cat summary.json
+
+      # Written only when it changed, and only over the object this run read:
+      # --if-match refuses if somebody else wrote it since, and --if-none-match
+      # refuses to create one over an object that appeared meanwhile. Either
+      # refusal fails the run with nothing lost; the next run starts from the
+      # newer table.
+      - name: Save the table
+        id: save
+        env:
+          ETAG: ${{ steps.previous.outputs.etag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$ETAG" ] && cmp -s previous.json found_prices.json; then
+            echo "the table did not change"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$ETAG" ]; then
+            condition=(--if-match "$ETAG")
+          else
+            condition=(--if-none-match '*')
+          fi
+          version=$(aws s3api put-object --bucket "$PRICES_BUCKET" --key "$PRICES_KEY" \
+            --region "$PRICES_REGION" --body found_prices.json \
+            --content-type application/json "${condition[@]}" \
+            --query VersionId --output text)
+          # An unversioned bucket answers "None", and a release records the
+          # version it embedded so the table can be read back later.
+          if [ -z "$version" ] || [ "$version" = "None" ]; then
+            echo "::error::s3://$PRICES_BUCKET has versioning off; the table was written, but a release could not say which one it embedded. Turn versioning on and run this again."
+            exit 1
+          fi
+          echo "saved s3://$PRICES_BUCKET/$PRICES_KEY version $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always() && steps.find.outputs.status != ''
+        env:
+          VERSION: ${{ steps.save.outputs.version }}
+        run: |
+          [ -f report.md ] || exit 0
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$VERSION" ]; then
+            echo "Saved as \`s3://$PRICES_BUCKET/$PRICES_KEY\`, version \`$VERSION\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # One issue, kept current: opened when a model has no price, rewritten
+      # on every run while any has none, closed when none is left. A new issue
+      # per run would be closed unread by the third.
+      #
+      # Through the REST API rather than `gh issue edit`, which takes the same
+      # GraphQL path as `gh pr edit` - and that fails on this repository with an
+      # error about Projects (classic), having applied nothing. A label that
+      # does not exist yet is created by the issue that first names it.
+      - name: Keep the unpriced-models issue current
+        if: steps.find.outputs.status != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Models with no price
+        run: |
+          set -euo pipefail
+          unpriced=$(jq -r '.unpriced' summary.json)
+          number=$(gh api "repos/$GITHUB_REPOSITORY/issues?state=open&labels=pricing&per_page=100" \
+            --jq "map(select(.title == \"$TITLE\" and .pull_request == null)) | .[0].number // empty")
+          {
+            echo "The [Prices workflow]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) could not price these models. A request for one is recorded unpriced until a rate is set under \`pricing.models\` or a later run finds one. This issue is rewritten by every run and closed when nothing is left."
+            echo
+            cat report.md
+          } > issue.md
+          if [ "$unpriced" -gt 0 ]; then
+            if [ -n "$number" ]; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/$number" -F body=@issue.md --jq '.html_url'
+            else
+              gh api "repos/$GITHUB_REPOSITORY/issues" -f title="$TITLE" -F body=@issue.md \
+                -f 'labels[]=pricing' --jq '.html_url'
+            fi
+          elif [ -n "$number" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues/$number/comments" \
+              -f body="Every model the last run read has a price." > /dev/null
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/$number" -f state=closed --jq '.html_url'
+          fi
+
+      - name: Fail if the run could not look at everything
+        if: steps.find.outputs.status == '3'
+        run: |
+          echo "::error::the price finder could not read something; see the run summary"
+          exit 1

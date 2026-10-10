@@ -1,0 +1,95 @@
+---
+// SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+// SPDX-License-Identifier: AGPL-3.0-only
+
+/**
+ * The version selector.
+ *
+ * THE PROBLEM THIS SOLVES, AND WHY IT IS NOT A BUILD-TIME LIST. A frozen build
+ * is never rebuilt, so /docs/v0.9 cannot know that v1.0 was published four
+ * months after it. A list baked in at build time would therefore be correct
+ * only on the newest version and quietly wrong on every older one - and the
+ * older ones are exactly where somebody is looking for the way forward.
+ *
+ * So the list is fetched from /docs/versions.json, which the deploy rewrites
+ * on every publish. The options rendered below are the fallback: what this
+ * build knew about itself, shown when the fetch fails or the page is opened
+ * from disk. That is the one case where showing stale data beats showing
+ * nothing, because the alternative is a selector with no options at all.
+ */
+const current = (import.meta.env.DOCS_VERSION || process.env.DOCS_VERSION || '').trim();
+const id = current || 'latest';
+const label = current === 'next' ? 'main (unreleased)' : current || 'latest release';
+---
+
+<div class="version-select" data-current={id}>
+  <label class="version-select__label" for="panorama-version">Version</label>
+  <!-- The chevron is the wrapper's, not the select's. A native one sits a
+       fixed inset from the right border, and this control is a pill, so the
+       border curves away underneath it and the mark reads as crowded into the
+       corner. Drawing it here puts it where the straight part of the edge is
+       and lets it take currentcolor, which a background image could not. -->
+  <div class="version-select__field">
+    <select id="panorama-version" class="version-select__control">
+      <option value="/docs/" selected={!current}>{label}</option>
+    </select>
+  </div>
+</div>
+
+<script>
+  // Not `is:inline`: Astro bundles this to a file, so the docs CSP stays
+  // `script-src 'self'` plus the hashes Starlight itself inlines. An inline
+  // script here would add a hash that changes every time this file is edited.
+  const root = document.querySelector<HTMLElement>('.version-select');
+  const select = document.querySelector<HTMLSelectElement>('#panorama-version');
+  if (root && select) {
+    const current = root.dataset.current ?? 'latest';
+
+    type Version = { id: string; label: string; path: string };
+
+    const render = (versions: Version[]) => {
+      if (!versions.length) return;
+      select.replaceChildren(
+        ...versions.map((v) => {
+          const option = new Option(v.label, v.path, false, v.id === current);
+          return option;
+        }),
+      );
+      // A build whose own id is absent from the published list is a version
+      // that was deployed and then withdrawn. Say so rather than silently
+      // selecting a different version's path.
+      if (!versions.some((v) => v.id === current)) {
+        select.prepend(new Option(`${current} (withdrawn)`, location.pathname, false, true));
+      }
+    };
+
+    fetch('/docs/versions.json', { cache: 'no-cache' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
+      .then((data) => render(data.versions ?? []))
+      .catch((err) => {
+        // Logged, not swallowed: the selector still shows this build's own
+        // version, and the reason the list is short is in the console.
+        console.warn('[panorama-docs] version list unavailable:', err);
+      });
+
+    select.addEventListener('change', async () => {
+      const target = select.value;
+      if (!target) return;
+
+      // The same page in the other version, when it exists there. A page that
+      // does not - a screen documented after that release - would otherwise
+      // land on the distribution's 404, so it is checked before navigating and
+      // falls back to that version's front page.
+      const rest = location.pathname.replace(/^\/docs\/(v\d+\.\d+|next)\//, '/');
+      const candidate = target.replace(/\/$/, '') + rest;
+
+      select.disabled = true;
+      try {
+        const res = await fetch(candidate, { method: 'HEAD' });
+        location.assign(res.ok ? candidate : target);
+      } catch {
+        location.assign(target);
+      }
+    });
+  }
+</script>

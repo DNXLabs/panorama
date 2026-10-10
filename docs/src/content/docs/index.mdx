@@ -1,0 +1,91 @@
+---
+title: Panorama
+description: >-
+  An open-source AI gateway that connects coding-AI spend to real work. SSO,
+  per-team budgets, model routing over Amazon Bedrock, and cost attributed to
+  branches, tickets and pull requests with no client configuration.
+template: splash
+hero:
+  tagline: >-
+    An AI gateway that runs in your own infrastructure and connects coding-AI
+    spend to the work it paid for. One endpoint, one container, no prompt or
+    code leaving your network.
+  actions:
+    - text: Quickstart
+      link: /docs/start/try-it/
+      icon: right-arrow
+      variant: primary
+    - text: What Panorama is
+      link: /docs/start/what-it-is/
+      variant: minimal
+    - text: Source
+      link: https://github.com/dnxlabs/panorama
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+:::caution[Pre-release]
+Panorama runs, and it has not been through a production deployment yet. See
+[what works today](/docs/start/what-it-is/#status).
+:::
+
+## Pick where to start
+
+<CardGrid>
+  <LinkCard
+    title="I want to understand it"
+    href="/docs/start/what-it-is/"
+    description="What happens to a request, in one diagram, and the three things Panorama will never do."
+  />
+  <LinkCard
+    title="I want to deploy it on AWS"
+    href="/docs/start/try-it/"
+    description="One CloudFormation template, single sign-on, and Claude Code pointed at the gateway."
+  />
+  <LinkCard
+    title="I want to deploy it somewhere else"
+    href="/docs/deploy/server/"
+    description="Docker Compose and SQLite on a server you run."
+  />
+  <LinkCard
+    title="My company runs it and I write code"
+    href="/docs/engineers/setup/"
+    description="Get a token, then configure Claude Code, opencode or Codex CLI."
+  />
+</CardGrid>
+
+## What it does
+
+<CardGrid>
+  <Card title="One governed endpoint" icon="approve-check">
+    Every request is authenticated, checked against a budget, sent to a model
+    you chose, and recorded.
+  </Card>
+  <Card title="Cost you can trust" icon="seti:money">
+    Input, output, cache read and cache write are priced separately, per model
+    and per region. A coding agent is mostly cache reads: price them as input
+    and the bill is overstated several-fold.
+  </Card>
+  <Card title="Cost per branch, ticket and PR" icon="git-pull-request">
+    Read out of the request as it passes, then confirmed against GitHub
+    (experimental).
+    "PAY-1183 cost $18.40, merged."
+  </Card>
+  <Card title="Budgets that hold" icon="warning">
+    Per person, per team, per deployment. A soft limit warns and closes the
+    routes you marked as too expensive to keep serving. A hard limit stops the
+    request and says when the budget resets.
+  </Card>
+</CardGrid>
+
+## Three things it will never do
+
+1. **Store a prompt or a response.** Bodies are pattern-matched in flight and
+   discarded.
+2. **Show one engineer another engineer's numbers.**
+3. **Hide what it could not attribute.** Unattributed spend appears beside
+   every attributed number.
+
+[What each of those means in practice](/docs/start/what-it-is/#three-things-it-will-never-do).

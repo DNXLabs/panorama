@@ -1,0 +1,407 @@
+[
+  {
+    "path": "encryption_key",
+    "name": "EncryptionKey",
+    "env": "PANORAMA_ENCRYPTION_KEY",
+    "type": "string",
+    "default": "not set",
+    "doc": "EncryptionKey protects the credentials an administrator stores from the\nconsole - today the integration connections.\n\nEither 32 base64 bytes, which `panorama admin generate-key` mints and\nwhich are used exactly as given, or any passphrase of at least\nsecrets.MinPassphrase characters, which the key is derived from. See\nsecrets.DeriveKey for why the first case is not simply the second.\n\nIt stays in the file while the credentials it protects live in the\ndatabase, and that split is the point: a dump, a replica or a backup\ncarries no working credential, because the one thing needed to read them\nwas never in any of them.\n\nOptional. A deployment without one runs normally and simply cannot store\na credential - the console says so at the moment somebody tries.",
+    "section": "encryption_key"
+  },
+  {
+    "path": "server.addr",
+    "name": "Addr",
+    "env": "PANORAMA_SERVER_ADDR",
+    "type": "string",
+    "default": ":8088",
+    "doc": "Addr is the listen address, as host:port. An empty host listens on all\ninterfaces.",
+    "section": "server"
+  },
+  {
+    "path": "server.base_url",
+    "name": "BaseURL",
+    "env": "PANORAMA_SERVER_BASE_URL",
+    "type": "string",
+    "default": "http://localhost:8088",
+    "doc": "BaseURL is the externally reachable origin of this deployment, e.g.\nhttps://panorama.internal. It is used to build OIDC redirect URLs and the\nendpoint shown in client setup instructions, so it must match what clients\nactually dial.",
+    "section": "server"
+  },
+  {
+    "path": "server.read_header_timeout",
+    "name": "ReadHeaderTimeout",
+    "env": "PANORAMA_SERVER_READ_HEADER_TIMEOUT",
+    "type": "duration",
+    "default": "15s",
+    "doc": "ReadHeaderTimeout bounds how long a client may take to send its request\nheaders. It deliberately does not bound the body or the response: streaming\nresponses are long-lived by design.",
+    "section": "server"
+  },
+  {
+    "path": "server.shutdown_timeout",
+    "name": "ShutdownTimeout",
+    "env": "PANORAMA_SERVER_SHUTDOWN_TIMEOUT",
+    "type": "duration",
+    "default": "30s",
+    "doc": "ShutdownTimeout bounds how long a graceful shutdown waits for in-flight\nrequests - including active streams - before the process exits anyway.",
+    "section": "server"
+  },
+  {
+    "path": "server.max_request_bytes",
+    "name": "MaxRequestBytes",
+    "env": "PANORAMA_SERVER_MAX_REQUEST_BYTES",
+    "type": "number",
+    "default": "32 MiB",
+    "doc": "MaxRequestBytes caps a proxied request body. Coding-agent requests carry\nwhole conversations, so the ceiling is high - but unbounded is not a\nceiling.",
+    "section": "server"
+  },
+  {
+    "path": "database.driver",
+    "name": "Driver",
+    "env": "PANORAMA_DATABASE_DRIVER",
+    "type": "string",
+    "default": "sqlite",
+    "doc": "Driver is either \"sqlite\" or \"postgres\".",
+    "section": "database"
+  },
+  {
+    "path": "database.dsn",
+    "name": "DSN",
+    "env": "PANORAMA_DATABASE_DSN",
+    "type": "string",
+    "default": "file:panorama.db?_pragma=busy_timeout(5000)\u0026_pragma=journal_mode(WAL)\u0026_pragma=foreign_keys(on)",
+    "doc": "DSN is the driver-specific data source name. It is one of two ways to\nsay where the database is; Host is the other, and setting both is an\nerror rather than a precedence rule.",
+    "section": "database"
+  },
+  {
+    "path": "database.host",
+    "name": "Host",
+    "env": "PANORAMA_DATABASE_HOST",
+    "type": "string",
+    "default": "not set",
+    "doc": "Host selects the discrete form: when it is set, the Postgres DSN is\nassembled from the fields below instead of being given whole.\n\nThis exists because of how a secret reaches a container in AWS. ECS\ninjects a secret one of two ways - a whole secret value into one\nenvironment variable, or one JSON key of a secret into one environment\nvariable - and it cannot concatenate. RDS, and every managed rotation\nAWS offers, writes a JSON document: username, password, host, port,\ndbname. So there is no path from what RDS writes to a single DSN string\nwithout something in between assembling it, and the two candidates for\nthat something are both worse than this. Resolving the password into the\ntask definition's environment renders it in plaintext to anyone holding\necs:DescribeTaskDefinition; a custom resource that reads one secret and\nwrites another is a second moving part that rotation would then have to\nre-trigger.\n\nAssembling here costs a URL build and lets the password arrive as a\nsecret reference that is resolved by the task, never by the template.",
+    "section": "database"
+  },
+  {
+    "path": "database.port",
+    "name": "Port",
+    "env": "PANORAMA_DATABASE_PORT",
+    "type": "number",
+    "default": "5432",
+    "doc": "Port is the Postgres port. Used only in the discrete form.",
+    "section": "database"
+  },
+  {
+    "path": "database.name",
+    "name": "Name",
+    "env": "PANORAMA_DATABASE_NAME",
+    "type": "string",
+    "default": "panorama",
+    "doc": "Name is the database name. Used only in the discrete form.",
+    "section": "database"
+  },
+  {
+    "path": "database.user",
+    "name": "User",
+    "env": "PANORAMA_DATABASE_USER",
+    "type": "string",
+    "default": "not set",
+    "doc": "User is the database user. Used only in the discrete form.",
+    "section": "database"
+  },
+  {
+    "path": "database.password",
+    "name": "Password",
+    "env": "PANORAMA_DATABASE_PASSWORD",
+    "type": "string",
+    "default": "not set",
+    "doc": "Password is the database password. Prefer PasswordFile or the\nPANORAMA_DATABASE_PASSWORD environment variable over writing it into a\nconfiguration file. Used only in the discrete form.",
+    "section": "database"
+  },
+  {
+    "path": "database.password_file",
+    "name": "PasswordFile",
+    "env": "PANORAMA_DATABASE_PASSWORD_FILE",
+    "type": "string",
+    "default": "not set",
+    "doc": "PasswordFile reads the password from a file, which is how a Kubernetes\nsecret or a Docker secret mount arrives. ECS needs neither: it injects\nthe value as an environment variable directly from Secrets Manager.",
+    "section": "database"
+  },
+  {
+    "path": "database.sslmode",
+    "name": "SSLMode",
+    "env": "PANORAMA_DATABASE_SSLMODE",
+    "type": "string",
+    "default": "require",
+    "doc": "SSLMode is the libpq sslmode for the assembled DSN. Defaults to\n\"require\", which encrypts the connection without verifying the server\ncertificate - the ordinary posture for a task and an RDS instance in one\nVPC. \"verify-full\" is the stronger setting and needs the Amazon RDS CA\nbundle present in the image, which the distroless base does not carry.",
+    "section": "database"
+  },
+  {
+    "path": "database.max_open_conns",
+    "name": "MaxOpenConns",
+    "env": "PANORAMA_DATABASE_MAX_OPEN_CONNS",
+    "type": "number",
+    "default": "25",
+    "doc": "MaxOpenConns caps the connection pool. Ignored for SQLite, which is held\nto a single writer.",
+    "section": "database"
+  },
+  {
+    "path": "database.auto_migrate",
+    "name": "AutoMigrate",
+    "env": "PANORAMA_DATABASE_AUTO_MIGRATE",
+    "type": "boolean",
+    "default": "true",
+    "doc": "AutoMigrate runs pending migrations at startup. Convenient for the\nsingle-container quickstart; operators running multiple replicas should\ndisable it and migrate as a separate step.",
+    "section": "database"
+  },
+  {
+    "path": "log.level",
+    "name": "Level",
+    "env": "PANORAMA_LOG_LEVEL",
+    "type": "string",
+    "default": "info",
+    "doc": "Level is one of debug, info, warn, error.",
+    "section": "log"
+  },
+  {
+    "path": "log.format",
+    "name": "Format",
+    "env": "PANORAMA_LOG_FORMAT",
+    "type": "string",
+    "default": "json",
+    "doc": "Format is either \"json\" or \"text\".",
+    "section": "log"
+  },
+  {
+    "path": "bedrock.region",
+    "name": "Region",
+    "env": "PANORAMA_BEDROCK_REGION",
+    "type": "string",
+    "default": "not set",
+    "doc": "Region seeds the bedrock provider's region, e.g. ap-southeast-2. Setting\nit on a fresh deployment is how compose and CloudFormation arrive with a\nprovider already configured.",
+    "section": "bedrock"
+  },
+  {
+    "path": "bedrock.unsupported_betas",
+    "name": "UnsupportedBetas",
+    "env": "PANORAMA_BEDROCK_UNSUPPORTED_BETAS",
+    "type": "list",
+    "default": "empty",
+    "doc": "UnsupportedBetas seeds the bedrock provider's list of beta feature flags\nto drop before a request reaches Bedrock. Unset uses the provider's\nbuilt-in list; an empty list forwards every flag.",
+    "section": "bedrock"
+  },
+  {
+    "path": "bedrock.context_windows",
+    "name": "ContextWindows",
+    "env": "PANORAMA_BEDROCK_CONTEXT_WINDOWS",
+    "type": "map",
+    "default": "empty",
+    "doc": "ContextWindows seeds the bedrock provider's context-window overrides,\nkeyed by model family (\"anthropic.claude-sonnet-5\") or exact id. Setting\na family to 0 makes it unrecorded.",
+    "section": "bedrock"
+  },
+  {
+    "path": "providers.discovery_interval",
+    "name": "DiscoveryInterval",
+    "env": "PANORAMA_PROVIDERS_DISCOVERY_INTERVAL",
+    "type": "duration",
+    "default": "6h",
+    "doc": "DiscoveryInterval is how often each provider is asked what this account\nand its region can invoke. Zero uses the default; negative disables the\njob, which is what an air-gapped deployment configured entirely from its\nfile wants.\n\nThe answer changes when AWS ships a model or somebody edits an IAM\npolicy, so this is hours rather than minutes. The console offers a\nrefresh for the case where somebody has just made such a change.",
+    "section": "providers"
+  },
+  {
+    "path": "pricing.refresh_interval",
+    "name": "RefreshInterval",
+    "env": "PANORAMA_PRICING_REFRESH_INTERVAL",
+    "type": "duration",
+    "default": "24h",
+    "doc": "RefreshInterval is how often rates are re-fetched from the AWS Price List\nAPI. Zero disables the refresh and leaves whatever is already in the\nprice table - the compiled-in seed, plus anything configured below.\n\nThe fetch needs two IAM permissions, pricing:GetProducts and\nbedrock:ListFoundationModels. The second is not incidental: the price\ncatalogue identifies a model only by a display name, and Bedrock's model\nlist is what maps that name to the id the gateway actually invokes.",
+    "section": "pricing"
+  },
+  {
+    "path": "pricing.models",
+    "name": "Models",
+    "env": "PANORAMA_PRICING_MODELS",
+    "type": "map",
+    "default": "empty",
+    "doc": "Models overrides published rates per model, in dollars per million\ntokens. It exists for two real cases: an enterprise agreement whose\nprices are not the public ones, and a model too new to be in either the\nseed or the catalogue.\n\nThe key is the model a route points at, as provider/model -\nbedrock/us.anthropic.claude-sonnet-5 - with the inference-profile prefix\nexactly as Bedrock publishes it. The prefix is part of the key because it\nselects which of a model's two published rate sets is being overridden:\n`us.` rates and `global.` rates differ by about 10%.\n\nA model whose price changes above a prompt size - GPT-5.x above 272K\ninput tokens - states the larger price under tiers, which replaces every\nrate for a request that large.\n\nA key must name its provider. A bare model id is refused with the\nspelling to use, because the same id is valid on more than one provider\nand the two differ in where a prompt is processed and what it costs.",
+    "section": "pricing"
+  },
+  {
+    "path": "policy.reload_interval",
+    "name": "ReloadInterval",
+    "env": "PANORAMA_POLICY_RELOAD_INTERVAL",
+    "type": "duration",
+    "default": "30s",
+    "doc": "ReloadInterval is how often routes, budgets, and spend are re-read.\n\nBetween reloads a replica still counts its own traffic, so this does not\nbound how fast a budget reacts to what this process is serving - only how\nfast it learns what other replicas have served. A single-replica\ndeployment is unaffected by the value.",
+    "section": "policy"
+  },
+  {
+    "path": "auth.grant_ttl",
+    "name": "GrantTTL",
+    "env": "PANORAMA_AUTH_GRANT_TTL",
+    "type": "duration",
+    "default": "720h",
+    "doc": "GrantTTL is how long a signed-in CLI stays signed in. Zero means the\ngrant never expires on its own and is ended only by revocation.",
+    "section": "auth"
+  },
+  {
+    "path": "auth.token_ttl",
+    "name": "TokenTTL",
+    "env": "PANORAMA_AUTH_TOKEN_TTL",
+    "type": "duration",
+    "default": "1h",
+    "doc": "TokenTTL is the lifetime of each gateway token minted from a grant, and\nso the upper bound on how long a revoked grant keeps buying model calls.",
+    "section": "auth"
+  },
+  {
+    "path": "auth.device_code_ttl",
+    "name": "DeviceCodeTTL",
+    "env": "PANORAMA_AUTH_DEVICE_CODE_TTL",
+    "type": "duration",
+    "default": "10m",
+    "doc": "DeviceCodeTTL is how long a device-authorization code waits for a human.",
+    "section": "auth"
+  },
+  {
+    "path": "auth.device_poll_interval",
+    "name": "DevicePollInterval",
+    "env": "PANORAMA_AUTH_DEVICE_POLL_INTERVAL",
+    "type": "duration",
+    "default": "5s",
+    "doc": "DevicePollInterval is the cadence a CLI is told to poll at. Polling\nfaster is answered with slow_down rather than with a grant.",
+    "section": "auth"
+  },
+  {
+    "path": "auth.max_token_ttl",
+    "name": "MaxTokenTTL",
+    "env": "PANORAMA_AUTH_MAX_TOKEN_TTL",
+    "type": "duration",
+    "default": "not set",
+    "doc": "MaxTokenTTL shortens the thirty days a minted gateway token lives. It\nbinds downward only: zero, or anything above thirty days, leaves the\nthirty days as they are.",
+    "section": "auth"
+  },
+  {
+    "path": "attribution.enabled",
+    "name": "Enabled",
+    "env": "PANORAMA_ATTRIBUTION_ENABLED",
+    "type": "boolean",
+    "default": "not set",
+    "doc": "Enabled turns in-flight extraction on. It is on by default: a gateway\nthat does not attribute is missing the reason it was deployed.",
+    "section": "attribution"
+  },
+  {
+    "path": "attribution.ticket_pattern",
+    "name": "TicketPattern",
+    "env": "PANORAMA_ATTRIBUTION_TICKET_PATTERN",
+    "type": "string",
+    "default": "not set",
+    "doc": "TicketPattern is the regular expression that recognises a ticket key.\nEmpty uses the default, which matches the shape most trackers use.\n\nNaming your projects - (PAY|BILL)-\\d+ - turns the lowest rung of the\nprovenance ladder from a heuristic into an allowlist, and is the\nrecommended setting for anyone who cares about precision. The default has\nto guess, and guards itself against the identifiers that look like ticket\nkeys and are not: UTF-8, SHA-1, CVE-2024.",
+    "section": "attribution"
+  },
+  {
+    "path": "attribution.session_cache_size",
+    "name": "SessionCacheSize",
+    "env": "PANORAMA_ATTRIBUTION_SESSION_CACHE_SIZE",
+    "type": "number",
+    "default": "not set",
+    "doc": "SessionCacheSize is how many live conversations are remembered in memory\nso that a session is attributed once rather than once per turn. Zero uses\nthe default.",
+    "section": "attribution"
+  },
+  {
+    "path": "integrations.sync_interval",
+    "name": "SyncInterval",
+    "env": "PANORAMA_INTEGRATIONS_SYNC_INTERVAL",
+    "type": "duration",
+    "default": "not set",
+    "doc": "SyncInterval is how often the connected systems are asked about the work\nitems Panorama has seen. Zero uses the default.",
+    "section": "integrations"
+  },
+  {
+    "path": "integrations.stale_after",
+    "name": "StaleAfter",
+    "env": "PANORAMA_INTEGRATIONS_STALE_AFTER",
+    "type": "duration",
+    "default": "not set",
+    "doc": "StaleAfter is how long a confirmed answer is trusted before it is asked\nagain. Zero uses the default.",
+    "section": "integrations"
+  },
+  {
+    "path": "oidc.issuer",
+    "name": "Issuer",
+    "env": "PANORAMA_OIDC_ISSUER",
+    "type": "string",
+    "default": "not set",
+    "doc": "Issuer is the OIDC issuer URL, used for discovery.",
+    "section": "oidc"
+  },
+  {
+    "path": "oidc.client_id",
+    "name": "ClientID",
+    "env": "PANORAMA_OIDC_CLIENT_ID",
+    "type": "string",
+    "default": "not set",
+    "doc": "ClientID identifies Panorama to the identity provider.",
+    "section": "oidc"
+  },
+  {
+    "path": "oidc.client_secret",
+    "name": "ClientSecret",
+    "env": "PANORAMA_OIDC_CLIENT_SECRET",
+    "type": "string",
+    "default": "not set",
+    "doc": "ClientSecret is the client secret. Prefer ClientSecretFile or the\nPANORAMA_OIDC_CLIENT_SECRET environment variable over writing it into a\nconfiguration file.",
+    "section": "oidc"
+  },
+  {
+    "path": "oidc.client_secret_file",
+    "name": "ClientSecretFile",
+    "env": "PANORAMA_OIDC_CLIENT_SECRET_FILE",
+    "type": "string",
+    "default": "not set",
+    "doc": "ClientSecretFile reads the client secret from a file, which is how\nKubernetes and ECS secret mounts present it.",
+    "section": "oidc"
+  },
+  {
+    "path": "oidc.scopes",
+    "name": "Scopes",
+    "env": "PANORAMA_OIDC_SCOPES",
+    "type": "list",
+    "default": "[openid profile email groups]",
+    "doc": "Scopes requested at authorisation. Defaults to openid, profile, email,\ngroups.",
+    "section": "oidc"
+  },
+  {
+    "path": "oidc.groups_claim",
+    "name": "GroupsClaim",
+    "env": "PANORAMA_OIDC_GROUPS_CLAIM",
+    "type": "string",
+    "default": "groups",
+    "doc": "GroupsClaim is the token claim carrying group membership, mapped to\nPanorama roles.",
+    "section": "oidc"
+  },
+  {
+    "path": "oidc.allowed_domains",
+    "name": "AllowedDomains",
+    "env": "PANORAMA_OIDC_ALLOWED_DOMAINS",
+    "type": "list",
+    "default": "empty",
+    "doc": "AllowedDomains limits sign-in to accounts in these domains, such as\nexample.com. Empty allows every account the issuer signs in, which is\nright when the issuer is your own tenant. Required when the issuer is\nGoogle, which signs in every Google account there is.",
+    "section": "oidc"
+  },
+  {
+    "path": "web_search.gateway_url",
+    "name": "GatewayURL",
+    "env": "PANORAMA_WEB_SEARCH_GATEWAY_URL",
+    "type": "string",
+    "default": "not set",
+    "doc": "GatewayURL is the AgentCore gateway's MCP endpoint, the\nWebSearchGatewayUrl output of the CloudFormation stack. Empty leaves the\nwhole of web search to the console.",
+    "section": "web_search"
+  },
+  {
+    "path": "dev.sign_in_as",
+    "name": "SignInAs",
+    "env": "PANORAMA_DEV_SIGN_IN_AS",
+    "type": "string",
+    "default": "not set",
+    "doc": "SignInAs is the email of the account POST /api/v1/auth/dev opens a\nsession for, creating it as an administrator if it does not exist. Empty\n- the default, and the value of every deployment that is not somebody's\nlaptop - means the route is not registered at all.",
+    "section": "dev"
+  }
+]

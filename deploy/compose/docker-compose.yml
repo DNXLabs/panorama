@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Panorama on SQLite - the zero-dependency evaluation path.
+#
+#   docker compose -f deploy/compose/docker-compose.yml up --build
+#   curl localhost:8088/healthz
+#
+# One container, one file, no external services. Good for trying Panorama out
+# and for a team: every background job runs here too. Move to
+# docker-compose.postgres.yml when you want more than one replica, because
+# SQLite is held to a single writer.
+#
+# The database lives in a named volume on purpose. SQLite needs locking and
+# shared-memory semantics that a bind mount, an NFS share or a macOS host
+# directory do not reliably provide, and both ways it fails are silent.
+
+name: panorama
+
+services:
+  panorama:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      # Which release's found price table to embed: latest, a tag, or none.
+      # See the Dockerfile and PANORAMA_FOUND_PRICES in .env.example.
+      args:
+        FOUND_PRICES: ${PANORAMA_FOUND_PRICES:-latest}
+    image: panorama:latest
+    restart: unless-stopped
+    ports:
+      - "${PANORAMA_PORT:-8088}:8088"
+    # Local configuration - secrets included - comes from a .env beside this
+    # file, which is git-ignored. Compose reads it from its own directory rather
+    # than from wherever you happen to be standing, and it is optional, so a
+    # deployment that configures everything through real environment variables
+    # needs no file at all.
+    #
+    # Anything set under `environment:` below wins over .env, so this file stays
+    # the authority on how the container is wired and .env supplies only what is
+    # deployment-specific. The deployment-specific ones are written
+    # `${NAME:-default}` and read .env by that exact name; the rest - the driver,
+    # the DSN, the data path - are fixed here on purpose.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PANORAMA_SERVER_ADDR: ":8088"
+      # The address a browser reaches the console at, which is also the OIDC
+      # redirect URI and what an engineer points a tool at. Defaults to
+      # localhost on the published port; set it in .env for anything else.
+      PANORAMA_SERVER_BASE_URL: "${PANORAMA_SERVER_BASE_URL:-http://localhost:${PANORAMA_PORT:-8088}}"
+      PANORAMA_DATABASE_DRIVER: "sqlite"
+      PANORAMA_DATABASE_DSN: "file:/data/panorama.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(on)"
+      PANORAMA_DATABASE_AUTO_MIGRATE: "true"
+      PANORAMA_LOG_LEVEL: "${PANORAMA_LOG_LEVEL:-info}"
+      PANORAMA_LOG_FORMAT: "text"
+
+      # Bedrock. Credentials come from the AWS default chain,
+      # so mount ~/.aws below or export AWS_ACCESS_KEY_ID and friends.
+      PANORAMA_BEDROCK_REGION: "${AWS_REGION:-}"
+      AWS_REGION: "${AWS_REGION:-}"
+      AWS_PROFILE: "${AWS_PROFILE:-}"
+    volumes:
+      - panorama-data:/data
+      # To use a local AWS profile, uncomment this. Read-only so
+      # the container cannot rewrite your AWS configuration. It is off by
+      # default because a bind mount of a directory you do not have would
+      # silently create an empty one.
+      # - ${HOME}/.aws:/home/nonroot/.aws:ro
+
+volumes:
+  panorama-data:

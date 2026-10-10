@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# The policy the end-to-end suite applies.
+#
+# Every model named here is one internal/fakebedrock's catalogue reports, on the
+# provider named in front of it. The Claude routes carry a rate in
+# pricing.Seed() - a route pointing at a model with no rate records a null cost,
+# which is correct behaviour and useless for a test that wants to assert what a
+# request cost. The open-weight routes deliberately do not: a fresh deployment
+# has no seeded rate for them, and a test asserts that honestly.
+
+budgets:
+  # High enough that nothing here trips it. The tests that exercise a limit
+  # rewrite it through the API, so the starting state is "no limit binds".
+  - scope: org
+    period: month
+    name: e2e deployment
+    hard_limit: 100.00
+
+routes:
+  # What a tool is configured with, and the everyday route.
+  - name: standard
+    description: What every engineer gets.
+    model: bedrock/us.anthropic.claude-sonnet-5
+
+  # The small, cheap route. Its display name carries "haiku", which is how the
+  # setup endpoint picks a route for ANTHROPIC_DEFAULT_HAIKU_MODEL.
+  - name: fast
+    description: The small model, for the cheap turns.
+    model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+
+  # The expensive route, marked to stop at the soft limit rather than serve past
+  # it. Everything else serves over soft, so a refusal here has somewhere to
+  # name - which is the half of the message worth testing.
+  - name: thrifty
+    description: Stops once a budget passes its soft limit.
+    model: bedrock/us.anthropic.claude-opus-5
+    serves_over_soft: false
+
+  # Claude on bedrock-mantle: the same Anthropic Messages API, a different
+  # endpoint, signing service and path, and no inference profile.
+  - name: mantle-sonnet
+    description: Claude, invoked in-region on bedrock-mantle.
+    model: bedrock-mantle/anthropic.claude-sonnet-5
+
+  # An open-weight model, served over Chat Completions and Responses at /v1.
+  - name: oss
+    description: An open-weight model for opencode and Codex.
+    model: bedrock-mantle/openai.gpt-oss-120b
+
+  # A model Mantle serves at /openai/v1 rather than /v1 - the path mistake that
+  # is easiest to make.
+  - name: gpt
+    description: A GPT-5.x model, over the OpenAI APIs.
+    model: bedrock-mantle/openai.gpt-5.5
+
+  # A model that speaks Chat Completions and nothing else, which is what opencode
+  # still sends Chat Completions to.
+  - name: qwen
+    description: An open-weight model that speaks only Chat Completions.
+    model: bedrock-mantle/qwen.qwen3-coder-480b-a35b-instruct

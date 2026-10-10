@@ -1,0 +1,129 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Fixtures for the mock integration sources.
+#
+# Point `integrations.github.provider: mock` (and the same for Jira) at a file
+# like this one and Panorama will confirm work items from it instead of from a
+# GitHub App or a Jira tenant. It is how the test suite exercises confirmation,
+# outcome metrics, and the branch → pull request → ticket chain, and how you can
+# see those screens work without a GitHub App installation.
+#
+# It is not a demo generator. A key that is not written here comes back "not
+# found", exactly as an unknown key would from the real API - so what you see
+# in the console is fixtures for the work you wrote down, and nothing invented
+# around it. The console labels a mock-backed integration as a mock everywhere
+# it appears, so a screenshot of it cannot be mistaken for a real deployment.
+#
+# Unknown fields are an error. A misspelled key here would silently do nothing
+# and the resulting test would pass for the wrong reason.
+
+# ---------------------------------------------------------------------------
+# GitHub: branches and pull requests.
+# ---------------------------------------------------------------------------
+github:
+  # A branch. This is the kind of work item Panorama infers with no client
+  # configuration at all - it reads the branch out of the request body - so it
+  # is the row most deployments have most of.
+  #
+  # The key is exactly what the gateway inferred: repository, "@", branch.
+  - kind: branch
+    key: acme/panorama@feat/streaming-tokenizer
+    repo: acme/panorama
+    branch: feat/streaming-tokenizer
+    # A branch has no outcome of its own; the pull request it was opened as
+    # does. This link is what carries the branch's spend to the merge status,
+    # and it is the one hop the outcome rollup follows.
+    links:
+      - kind: pull_request
+        key: acme/panorama#412
+
+  # The pull request. `kind` may be omitted under `github:` - a GitHub fixture
+  # is a pull request unless it says otherwise.
+  - key: acme/panorama#412
+    repo: acme/panorama
+    branch: feat/streaming-tokenizer
+    title: "feat: streaming tokenizer for card capture"
+    url: https://github.com/acme/panorama/pull/412
+    author: a.chen
+    project: acme/panorama
+    # `status` is GitHub's own word, shown to a human.
+    status: Merged
+    # `outcome` is the canonical position, and the only thing the metrics read.
+    # One of: open, landed, abandoned. Omit it for "nobody knows yet", which is
+    # a bucket of its own everywhere it is shown rather than being folded in
+    # with work that is merely still open.
+    outcome: landed
+    created_at: 2026-08-01T09:04:00Z
+    merged_at: 2026-08-03T14:12:00Z
+    links:
+      - kind: ticket
+        key: PAY-1183
+
+  # Spend that did not ship. Half of the point of outcome metrics is being able
+  # to see this number next to the other one.
+  - key: acme/panorama#418
+    repo: acme/panorama
+    branch: spike/vector-cache
+    title: "spike: vector cache for relevance"
+    url: https://github.com/acme/panorama/pull/418
+    author: r.patel
+    project: acme/panorama
+    status: Closed
+    outcome: abandoned
+    created_at: 2026-08-05T11:20:00Z
+    closed_at: 2026-08-09T16:40:00Z
+
+  - kind: branch
+    key: acme/panorama@spike/vector-cache
+    repo: acme/panorama
+    branch: spike/vector-cache
+    links:
+      - kind: pull_request
+        key: acme/panorama#418
+
+  # A branch whose name carries no ticket key, so the session attributes to the
+  # branch rather than to a ticket - and the chain is what carries its spend to
+  # the pull request that merged. This is the case cost per merged pull request
+  # is actually computed from, and it is worth having in any fixtures file you
+  # write: a file where every branch names a ticket never exercises it.
+  - kind: branch
+    key: acme/panorama@chore/bump-aws-sdk
+    repo: acme/panorama
+    branch: chore/bump-aws-sdk
+    links:
+      - kind: pull_request
+        key: acme/panorama#420
+
+  - key: acme/panorama#420
+    repo: acme/panorama
+    branch: chore/bump-aws-sdk
+    title: "chore: bump the AWS SDK"
+    url: https://github.com/acme/panorama/pull/420
+    author: m.okoye
+    project: acme/panorama
+    status: Merged
+    outcome: landed
+    created_at: 2026-08-10T09:00:00Z
+    merged_at: 2026-08-12T10:30:00Z
+
+# ---------------------------------------------------------------------------
+# Jira: tickets.
+# ---------------------------------------------------------------------------
+jira:
+  - key: PAY-1183
+    title: Streaming tokenizer for card capture
+    url: https://example.atlassian.net/browse/PAY-1183
+    # `project` drives the by-project rollup - a Jira project or epic.
+    project: PAY
+    status: Done
+    outcome: landed
+    created_at: 2026-07-28T08:00:00Z
+
+  - key: SRCH-12
+    title: Search relevance rework
+    url: https://example.atlassian.net/browse/SRCH-12
+    project: SRCH
+    status: In Progress
+    outcome: open
+    created_at: 2026-08-04T10:15:00Z

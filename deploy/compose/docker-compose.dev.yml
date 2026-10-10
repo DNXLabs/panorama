@@ -1,0 +1,202 @@
+# SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Panorama, live-reloading from your working tree.
+#
+#   make dev            # start it, with your ~/.aws mounted if you have one
+#   make dev-logs       # follow the gateway
+#   make dev-shell      # a bash prompt inside the gateway container
+#   make dev-down       # stop it
+#
+# Open http://localhost:5173. That is Vite, serving the console with hot reload
+# and proxying the API to the gateway on :8088. Point a coding tool at :8088.
+#
+# The sign-in page here offers a development sign-in as well as single sign-on:
+# one button, no identity provider, an administrator session for dev@localhost.
+# See PANORAMA_DEV_SIGN_IN_AS below for why it cannot escape this file.
+#
+# What updates without you doing anything:
+#
+#   ui/app/**      the browser patches the running page, in well under a second
+#   cmd/, internal/, ui/embed.go
+#                  air rebuilds and restarts the gateway, a few seconds warm
+#
+# What does not, and why:
+#
+#   go.mod         the watch tree is cmd/ internal/ ui/, so a root file is not
+#                  seen. `make dev-restart` after a dependency change.
+#   ui/app/package.json
+#                  npm install runs at container start. Same answer.
+#   this file      compose reads it once. `make dev` again.
+#
+# Nothing here builds the production image. It runs the Go toolchain against a
+# bind mount of the repository, which is why the containers have a shell and the
+# shipped one deliberately does not. Do not copy this file's shape into
+# deploy/compose/docker-compose.yml - that stack is what somebody evaluating
+# Panorama runs, and it should be the artifact, not the source.
+#
+# `docker compose -f deploy/compose/docker-compose.dev.yml up` works too. This
+# file is self-contained on purpose: nothing it needs lives in an overlay the
+# Makefile adds, because a stack that only works through one of its two obvious
+# entry points fails in whichever one you did not use.
+
+name: panorama-dev
+
+# Anchor for the two containers that run as you rather than as root. Bind mounts
+# are written through - node_modules, ui/dist, the Go caches - and a container
+# running as root would leave you a tree you cannot delete without sudo. The
+# Makefile substitutes your real ids; the default is for someone running
+# `docker compose` directly on a stock Linux account.
+x-dev-user: &dev-user "${PANORAMA_DEV_USER:-1000:1000}"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-panorama}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-panorama-dev-password}"
+      POSTGRES_DB: "${POSTGRES_DB:-panorama}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # Published, unlike the production-shaped stack's, because the reason to run
+    # this one is to look at things. `make dev-psql` uses it.
+    ports:
+      - "${PANORAMA_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-panorama} -d ${POSTGRES_DB:-panorama}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # The gateway, compiled from the mounted source on every change.
+  #
+  # Postgres, because it is what a production deployment runs. The background
+  # jobs - work-item confirmation, model discovery, the price-table refresh -
+  # are interval workers in this same process and run on SQLite too. See
+  # internal/jobs.
+  panorama:
+    image: golang:1.27.2-trixie
+    init: true
+    restart: unless-stopped
+    user: *dev-user
+    working_dir: /src
+    entrypoint: ["/src/deploy/compose/dev/gateway.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PANORAMA_PORT:-8088}:8088"
+    # The same optional .env the other two compose files read, so one file
+    # configures single sign-on and AWS for all three.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # The base URL is Vite's, not this container's. It is what the console is
+      # opened at, so it is what an identity provider must redirect back to:
+      # http://localhost:5173/auth/oidc/callback. Register that URI alongside
+      # your real one, or single sign-on will come back to a port with no
+      # console on it.
+      PANORAMA_SERVER_ADDR: ":8088"
+      PANORAMA_SERVER_BASE_URL: "http://localhost:${PANORAMA_CONSOLE_PORT:-5173}"
+
+      PANORAMA_DATABASE_DRIVER: "postgres"
+      PANORAMA_DATABASE_DSN: "postgres://${POSTGRES_USER:-panorama}:${POSTGRES_PASSWORD:-panorama-dev-password}@postgres:5432/${POSTGRES_DB:-panorama}?sslmode=disable"
+      PANORAMA_DATABASE_AUTO_MIGRATE: "true"
+
+      # debug by default here, and only here. This is the stack where you want
+      # every request in the scrollback.
+      PANORAMA_LOG_LEVEL: "${PANORAMA_LOG_LEVEL:-debug}"
+      PANORAMA_LOG_FORMAT: "text"
+
+      # The development sign-in.
+      #
+      # This stack is where the console is looked at, and looking at it means
+      # being signed in to it - which otherwise means somebody's real
+      # credentials at a real identity provider. A test, CI, and a coding agent
+      # asked to check a change to a screen have none, so this opens an
+      # administrator session for one named account with no provider at all.
+      #
+      # It is set here, and offered commented-out in .env.example for somebody
+      # trying the shipped image on their own laptop, which is what the
+      # Quickstart does. Nowhere else. The server enforces that rather than
+      # trusting it: with this set, Panorama refuses to start unless
+      # PANORAMA_SERVER_BASE_URL is loopback, so a production manifest that
+      # carries it does not boot. The route is not even registered when the
+      # variable is unset.
+      PANORAMA_DEV_SIGN_IN_AS: "${PANORAMA_DEV_SIGN_IN_AS:-dev@localhost}"
+
+      PANORAMA_BEDROCK_REGION: "${AWS_REGION:-}"
+      AWS_REGION: "${AWS_REGION:-}"
+      AWS_PROFILE: "${AWS_PROFILE:-}"
+
+      # The same cache layout the Makefile uses, pointed at the same directory,
+      # so `make test` and this stack warm each other's build cache instead of
+      # each compiling the module graph from scratch.
+      HOME: /gocache
+      GOMODCACHE: /gocache/mod
+      GOCACHE: /gocache/build
+      GOBIN: /gocache/bin
+      # Matches the shipped binary: pure-Go SQLite, no libc.
+      CGO_ENABLED: "0"
+    volumes:
+      - ../../:/src
+      - ../../.gocache:/gocache
+      # Your AWS configuration, read-only. HOME is /gocache in this stack, so
+      # this is $HOME/.aws - which is where it has to be rather than somewhere
+      # neutral with AWS_CONFIG_FILE pointing at it, because an SSO profile
+      # needs the token cache under ~/.aws/sso/cache and no environment
+      # variable relocates that. Run `aws sso login` on the host and the
+      # container reads the token like any other tool on your machine.
+      #
+      # create_host_path is off deliberately. Docker's default is to invent a
+      # missing bind source as an empty directory, and an empty ~/.aws is worse
+      # than an absent one: the SDK finds a config directory with nothing in it
+      # and reports `failed to get shared config profile, <name>`, which reads
+      # like a broken profile rather than a missing mount. With this off, a
+      # missing ~/.aws stops the container and names the path. If you have no
+      # AWS configuration at all, `mkdir -p ~/.aws` is the whole fix.
+      - type: bind
+        source: ${HOME}/.aws
+        target: /gocache/.aws
+        read_only: true
+        bind:
+          create_host_path: false
+
+  # The console, served by Vite with hot module replacement.
+  #
+  # This is the origin you open. It proxies /api, /auth, /v1 and the probes to
+  # the gateway, so the console runs against the real API - there is no mock
+  # layer here to drift out of sync with it.
+  console:
+    image: node:24-trixie-slim
+    init: true
+    restart: unless-stopped
+    user: *dev-user
+    working_dir: /ui/app
+    depends_on:
+      - panorama
+    command:
+      - bash
+      - -c
+      - npm install --no-audit --no-fund && exec npm run dev -- --host 0.0.0.0 --port 5173
+    ports:
+      - "${PANORAMA_CONSOLE_PORT:-5173}:5173"
+    environment:
+      HOME: /nodecache
+      npm_config_cache: /nodecache/npm
+      # Read by ui/app/vite.config.ts. `make ui-dev` leaves it unset and gets
+      # the localhost default, which is right there and wrong in here.
+      PANORAMA_PROXY_TARGET: "http://panorama:8088"
+      # Same reason air polls: inotify events do not cross a bind mount
+      # reliably on macOS, and a hot reload that quietly stops firing wastes
+      # more time than the polling costs.
+      PANORAMA_WATCH_POLL: "1"
+    volumes:
+      - ../../ui:/ui
+      - ../../.gocache/node:/nodecache
+
+volumes:
+  postgres-data:

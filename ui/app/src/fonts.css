@@ -1,0 +1,132 @@
+/* SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+   SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Questrial, Tomorrow, Lexend and JetBrains Mono - served from the binary.
+ *
+ * THIS IS THE FIRST DIVERGENCE FROM THE DESIGN SYSTEM'S OWN `tokens/fonts.css`.
+ * The exported system `@import`s
+ * every family from Google Fonts and records that as a caveat ("Fonts are
+ * CDN-linked, not vendored. If licensed binaries exist, drop them in
+ * assets/fonts/ and replace that import with @font-face rules"). These are the
+ * @font-face rules. An air-gapped deployment is a supported one, and a console
+ * that called a third party on every page load would contradict the claim the
+ * product is sold on.
+ *
+ * Only the latin subset is referenced; the packages also ship latin-ext and,
+ * for Lexend, vietnamese - and nothing in the console sets a word in any of
+ * them.
+ *
+ * The system's own third family, Mulish (`--font-secondary`), is not here.
+ * Nothing in the console spends it: it is the system's face for long-form
+ * secondary copy, and every such line on these screens is already `--font-ui`.
+ * A family nobody sets is a download nobody needs.
+ *
+ * Tomorrow is the other way round - a family the design system does not name,
+ * kept because the console has a job for it that the system's two faces cannot
+ * do. See its own note below.
+ */
+
+/* Questrial: `--font-mono`, and therefore the structural voice of the whole
+   console - every column head, every nav item, every button. Not the figures;
+   those are Tomorrow, below.
+
+   It is the design system's own substitute for STOLZL BOOK, the canonical DNX
+   typeface, and it is the whole of the answer rather than a placeholder for
+   one. Stolzl is a commercial face from The Northern Block, all rights
+   reserved: carrying the files would redistribute them to everyone who clones
+   an AGPL repository, and `go:embed` would put them in every container image
+   too. The system's caveat - "Supply Stolzl WOFF2 files to make them exact" -
+   is written for a marketing page built by whoever holds the licence, not for a
+   product UI shipped as source.
+
+   Its name is not in the `--font-mono` stack either, which is the subtler half.
+   A stack naming it renders one console for the few people with Stolzl
+   installed locally and another for everybody else, and a UI that is not the
+   same for two readers is a bug rather than a perk.
+
+   ONE WEIGHT, AND THE CONSOLE ASKS FOR NO OTHER - because Questrial ships
+   exactly one and there is no other to ask for. A rule setting 600 on
+   structural text gets a synthesised smear rather than a cut, which at 10px
+   uppercase is a smudge. Declaring the face at `400` alone is what makes that a
+   rule the browser enforces rather than a convention review has to catch.
+
+   It is not a monospace despite the token's name, and the token keeps that name
+   because renaming it would touch every rule in the system to say nothing new.
+   The consequence - proportional digits, no `tnum` - is recorded in
+   `design-tokens.css`. */
+@font-face {
+  font-family: 'Questrial';
+  src: url('../node_modules/@fontsource/questrial/files/questrial-latin-400-normal.woff2')
+    format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  /* swap, not block: the console is legible in the fallback stack, and a blank
+     page while a local font loads is a worse trade than one reflow. */
+  font-display: swap;
+}
+
+/* Tomorrow: `--font-figure`, and every numeral in the console is set in it.
+ *
+ * THIS IS THE ONE FAMILY THE DESIGN SYSTEM DOES NOT NAME. It is carried anyway,
+ * and the reason is a job neither brand face does: a square techno grotesque
+ * whose digits read as a readout - a meter, a scoreboard, an instrument - which
+ * is what a gateway's figures are. Questrial sets the words around them and
+ * Tomorrow sets the numbers, so a reader can tell a measurement from a label
+ * before reading either.
+ *
+ * It is scoped by the size tokens rather than by judgement. `--size-mono-fig`,
+ * `--size-figure` and `--size-stat` are the figure sizes and they get this
+ * face; `--size-mono-data` is the identifier size - an email, a slug, a group
+ * name, a work-item key - and it stays Questrial. So no call site decides
+ * whether a number has earned the face.
+ *
+ * ONE WEIGHT, AND IT IS LIGHT (300) RATHER THAN REGULAR. Tomorrow ships nine
+ * cuts and the choice runs in one direction only: heavier closes up the
+ * counters on the digits, and a 0 that reads as an 8 at 52px defeats the only
+ * thing a figure that size is for. Light opens them further, which is what a
+ * figure at 52px wants - the size is already carrying the emphasis, so the
+ * strokes do not have to.
+ *
+ * It is the same file at every size, and the small end is checked rather than
+ * assumed: an 11px table cell set in a light cut is the
+ * place a thin stroke would fail first. It holds, because the colour is doing
+ * the contrast work - every figure is `--text-primary`, which is the top of the
+ * ink ramp in both themes.
+ *
+ * Declared at 300 alone so the browser enforces it: ask for 400 or 700 and it
+ * synthesises a smear rather than reaching for a cut that does exist. */
+@font-face {
+  font-family: 'Tomorrow';
+  src: url('../node_modules/@fontsource/tomorrow/files/tomorrow-latin-300-normal.woff2')
+    format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Lexend: `--font-ui`, the voice for anything read as language. The design
+   system's `--font-body`, and the one family here that is variable, so one file
+   covers the whole range - which matters because this is the face that carries
+   the three rules in `styles.css` that set a weight above 400. */
+@font-face {
+  font-family: 'Lexend';
+  src: url('../node_modules/@fontsource-variable/lexend/files/lexend-latin-wght-normal.woff2')
+    format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* JetBrains Mono: `--font-code`, and nothing else. Four places render something
+   a person will paste into a terminal - a shell command, a model id, a rendered
+   opencode config, the block CopyBlock copies - and those need a real monospace,
+   because neither brand face is one. Variable, so one file covers every weight,
+   though this only ever sets the regular. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2')
+    format('woff2-variations');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}

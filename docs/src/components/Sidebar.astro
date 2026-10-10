@@ -1,0 +1,13 @@
+---
+// SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Starlight's sidebar, with the version selector above it. Overriding the
+// whole component rather than the site title because the selector belongs with
+// the navigation it changes, not with the wordmark.
+import Default from '@astrojs/starlight/components/Sidebar.astro';
+import VersionSelect from './VersionSelect.astro';
+---
+
+<VersionSelect />
+<Default><slot /></Default>

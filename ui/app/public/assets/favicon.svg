@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2320 2320">
+  <!-- PAN, on graphite.
+       Questrial OUTLINED rather than set. An SVG favicon is rendered in an
+       isolated context with no access to the page's fonts, so `font-family`
+       here would fall through to whatever the machine happens to have and the
+       mark would be a different typeface on every desktop. These are the glyph
+       outlines from the same `questrial-latin-400-normal.woff2` the console
+       ships, at the font's own 1000-unit em, laid out on its own advance widths
+       (628, 662, 733) with 60 units of uniform tracking, then flipped out of
+       the font's Y-up space into SVG's Y-down one.
+       What is centred is the INK and the CAP HEIGHT - not the advance box and
+       not the em box. Both carry side bearings and a descender that no letter
+       here uses, and centring on them leaves the mark visibly low and left.
+       Tracking is 60/1000, well under the wordmark's 0.18em: at 16px in a tab
+       strip that much letterspacing stops reading as a word and starts reading
+       as three separate marks.
+       One colour on graphite, the console's own page grey. No blue and no
+       second tone: at this
+       size the tile has to survive being a single flat mark. -->
+  <rect width="2320" height="2320" fill="#2d2f34"/>
+  <g fill="#ffffff" transform="translate(88.5 1491.0) scale(1 -1)">
+    <path transform="translate(0 0)" d="M81 0V662H379Q485 662 546.0 604.5Q607 547 607 449Q607 351 546.0 293.5Q485 236 379 236H156V0ZM156 306H374Q452 306 492.0 344.0Q532 382 532 449Q532 515 492.0 553.0Q452 591 374 591H156Z"/>
+    <path transform="translate(688 0)" d="M3 0 284 662H378L659 0H576L495 192H167L86 0ZM196 261H466L331 584Z"/>
+    <path transform="translate(1410 0)" d="M81 0V662H168L577 105V662H652V0H565L156 559V0Z"/>
+  </g>
+</svg>

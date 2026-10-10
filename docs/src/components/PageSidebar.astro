@@ -1,0 +1,87 @@
+---
+// SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
+// SPDX-License-Identifier: AGPL-3.0-only
+
+/**
+ * The right-hand "On this page", with a button that folds it away.
+ *
+ * WHY IT FOLDS. The configuration reference is a five-column table of every
+ * key, and the table of contents costs it about 320px - enough that the
+ * description column is cut off and the table has to be scrolled sideways to
+ * read. Dropping the table of contents from that page was the alternative, and
+ * it is the wrong trade: that page has thirteen sections and is the longest on
+ * the site, so it is the page that needs it most. Folding lets the reader
+ * decide, per visit, which of the two they want.
+ *
+ * It collapses to a rail rather than to nothing, because a control that
+ * removes itself leaves no way back. The rail is the same width as the button,
+ * carries the same border as the panel did, and is the only thing on the page
+ * that moves.
+ *
+ * The preference is remembered per reader in localStorage, wrapped because it
+ * throws in a private window and comes back empty when site data is cleared -
+ * in which case the panel is simply open, which is the default anyway.
+ *
+ * The one cost, stated rather than hidden: a reader who folded it sees the
+ * panel for a frame before the script runs, because this is a bundled module
+ * script and those are deferred. Setting it before paint would take an inline
+ * script, which would add a hash to the docs Content-Security-Policy and
+ * couple a layout preference to a deploy of the website repository's stack.
+ * A frame of reflow is the cheaper of the two.
+ */
+import Default from '@astrojs/starlight/components/PageSidebar.astro';
+---
+
+<button type="button" class="toc-fold" aria-expanded="true" aria-controls="toc-folding">
+  <span class="toc-fold__chevron" aria-hidden="true"></span>
+  <span class="sr-only toc-fold__label">Hide the table of contents</span>
+</button>
+
+<div id="toc-folding" class="toc-folding">
+  <Default><slot /></Default>
+</div>
+
+<script>
+  const KEY = 'panorama-docs-toc';
+  const root = document.documentElement;
+  const button = document.querySelector<HTMLButtonElement>('.toc-fold');
+  const label = button?.querySelector<HTMLElement>('.toc-fold__label');
+
+  const read = () => {
+    try {
+      return localStorage.getItem(KEY);
+    } catch {
+      // A private window, or site data blocked. The panel opens, which is what
+      // it would have done anyway.
+      return null;
+    }
+  };
+
+  const write = (value: string) => {
+    try {
+      localStorage.setItem(KEY, value);
+    } catch (err) {
+      // Logged rather than swallowed: the fold still works for this page, it
+      // just will not be remembered, and the reason is worth having in the
+      // console rather than being a mystery on the next visit.
+      console.warn('[panorama-docs] could not remember the table-of-contents preference:', err);
+    }
+  };
+
+  const apply = (collapsed: boolean) => {
+    if (collapsed) root.dataset.toc = 'collapsed';
+    else delete root.dataset.toc;
+    if (button) button.setAttribute('aria-expanded', String(!collapsed));
+    if (label) {
+      label.textContent = collapsed ? 'Show the table of contents' : 'Hide the table of contents';
+    }
+  };
+
+  apply(read() === 'collapsed');
+
+  button?.addEventListener('click', () => {
+    const collapsed = root.dataset.toc !== 'collapsed';
+    apply(collapsed);
+    write(collapsed ? 'collapsed' : 'expanded');
+  });
+</script>

@@ -1,0 +1,4 @@
+{
+  "note": "Rates the price finder added for models seed.json does not price. Empty in the repository on purpose: the release build replaces this file with the table the Prices workflow keeps in S3, so the rows here are only ever the ones that workflow found and verified. See cmd/pricefinder and .github/workflows/prices.yml.",
+  "entries": []
+}
