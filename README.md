@@ -6,6 +6,8 @@
 
 Sponsored by [DNX Solutions](https://www.dnx.solutions) · AGPL-3.0-only
 
+**[Documentation](https://panorama.dnx.ai/docs/)** · [Quickstart](https://panorama.dnx.ai/docs/start/try-it/) · [Deploy on AWS](https://panorama.dnx.ai/docs/deploy/aws/) · [Configuration](https://panorama.dnx.ai/docs/reference/configuration/)
+
 </div>
 
 ---
@@ -19,6 +21,12 @@ model routing you control, and — the part nothing else does — **cost attache
 actual work**, because the gateway reads the branch, ticket and pull request out of
 the traffic as it passes. No client configuration, no wrapper, no plugin.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/src/assets/console/analytics-spend-dark.webp">
+  <source media="(prefers-color-scheme: light)" srcset="docs/src/assets/console/analytics-spend-light.webp">
+  <img src="docs/src/assets/console/analytics-spend-light.webp" alt="The Analytics screen in the Panorama console. Thirty days of spend against the monthly cap, the share of it attributed to work beside the unattributed remainder, requests, cost per work item, active developers, and a daily spend chart.">
+</picture>
+
 > **Pre-release.** It runs, but it has not been through a production deployment
 > yet. See [Status](#status).
 
@@ -31,6 +39,12 @@ the traffic as it passes. No client configuration, no wrapper, no plugin.
 | **Cost per branch, ticket and PR** | Extracted from the request in flight, then confirmed against GitHub (experimental). "PAY-1183 cost $18.40, merged." |
 | **Budgets that hold** | Per person, per team, per deployment. Soft limits warn, and close the routes you marked as too expensive to keep serving — the engineer is told which routes still work. Hard limits stop the request with a message that says who can raise it. |
 | **SSO and revocable credentials** | Generic OIDC for the console. An engineer's coding tool holds a gateway token they mint themselves, revocable and good for 30 days. |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/src/assets/console/analytics-work-dark.webp">
+  <source media="(prefers-color-scheme: light)" srcset="docs/src/assets/console/analytics-work-light.webp">
+  <img src="docs/src/assets/console/analytics-work-light.webp" alt="The Work tab of Analytics. Each row is a ticket or repository the spend was tied to, with how it was found, its status from GitHub, and what it cost, under totals for attributed spend and spend per merged pull request.">
+</picture>
 
 ## Principles
 
