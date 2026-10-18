@@ -19,6 +19,13 @@ Everything else runs asynchronously against already-extracted metadata.
 Routes, budgets, team membership and spend all live in an in-memory snapshot,
 reloaded on an interval and incremented as requests complete.
 
+A change does not wait for the interval. Every write to a table the snapshot is
+read from moves a counter in the database, and each replica reads that one row
+once a second, off the request path, and reloads when it has moved. So a route
+saved in the console on one replica, or applied from a one-off task, is served
+everywhere within a second. Spend is still reconciled on the interval, because
+that is the query with a cost.
+
 A `SELECT` between a keystroke and the first token is exactly what this gateway
 promises not to do.
 

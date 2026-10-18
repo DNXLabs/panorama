@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/dnxlabs/panorama/internal/policy"
@@ -63,6 +64,18 @@ func (db *DB) LoadPolicy(ctx context.Context) (policy.Set, error) {
 	}
 	set.Index()
 	return set, nil
+}
+
+// PolicyGeneration reads the counter that every write to the tables LoadPolicy
+// reads moves, which is how a gateway learns that another process changed its
+// policy without reading the policy to find out. The triggers that move it are
+// in the 00002 migration, so no write path can forget to.
+func (db *DB) PolicyGeneration(ctx context.Context) (int64, error) {
+	var generation int64
+	if err := db.QueryRowContext(ctx, `SELECT generation FROM policy_generation`).Scan(&generation); err != nil {
+		return 0, fmt.Errorf("store: read the policy generation: %w", err)
+	}
+	return generation, nil
 }
 
 func (db *DB) loadBudgets(ctx context.Context) ([]policy.Budget, error) {
@@ -248,52 +261,109 @@ const spendAggregates = `
 // recreated. Recreating them would mint new ids for rows nothing changed, and
 // anything recorded against the old id would point at one that no longer
 // exists.
-// Applying the same document twice therefore changes nothing.
-func (db *DB) ApplyPolicy(ctx context.Context, set policy.Set) (added, updated, removed int, err error) {
+// Applying the same document twice therefore changes nothing, and says so: an
+// entry identical to the stored row is not written, so it keeps its updated_at
+// and is counted as unchanged. Reporting "1 updated" for a file nobody edited
+// sends whoever runs it from CI looking for the edit.
+func (db *DB) ApplyPolicy(ctx context.Context, set policy.Set) (PolicyChanges, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("store: apply policy: %w", err)
+		return PolicyChanges{}, fmt.Errorf("store: apply policy: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
 
-	routeAdd, routeUpd, routeDel, err := db.applyRoutes(ctx, tx, set.Routes, now)
+	routes, err := db.applyRoutes(ctx, tx, set.Routes, now)
 	if err != nil {
-		return 0, 0, 0, err
+		return PolicyChanges{}, err
 	}
-	budgetAdd, budgetUpd, budgetDel, err := db.applyBudgets(ctx, tx, set.Budgets, now)
+	budgets, err := db.applyBudgets(ctx, tx, set.Budgets, now)
 	if err != nil {
-		return 0, 0, 0, err
+		return PolicyChanges{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, 0, 0, fmt.Errorf("store: commit policy: %w", err)
+		return PolicyChanges{}, fmt.Errorf("store: commit policy: %w", err)
 	}
-	return routeAdd + budgetAdd, routeUpd + budgetUpd, routeDel + budgetDel, nil
+	return routes.plus(budgets), nil
 }
 
-// existingRouteNames reads which routes are stored, so an applied document can
-// tell an edit from a creation and a deletion from an omission.
-func existingRouteNames(ctx context.Context, tx *sql.Tx) (map[string]struct{}, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT name FROM model_routes`)
+// PolicyChanges counts what applying a document did, routes and budgets
+// together. Every entry in the document is exactly one of added, updated or
+// unchanged; removed counts stored entries the document left out.
+type PolicyChanges struct {
+	Added, Updated, Unchanged, Removed int
+}
+
+// Changed reports whether applying wrote anything at all.
+func (c PolicyChanges) Changed() bool { return c.Added+c.Updated+c.Removed > 0 }
+
+func (c PolicyChanges) plus(o PolicyChanges) PolicyChanges {
+	return PolicyChanges{
+		Added:     c.Added + o.Added,
+		Updated:   c.Updated + o.Updated,
+		Unchanged: c.Unchanged + o.Unchanged,
+		Removed:   c.Removed + o.Removed,
+	}
+}
+
+// storedRoute is a route row as applying a document compares it: every column
+// the document writes, and nothing it does not.
+type storedRoute struct {
+	description         string
+	users, teams, tools []string
+	target              string
+	servesOverSoft      bool
+}
+
+// existingRoutes reads the stored routes, so an applied document can tell an
+// edit from a creation, a deletion from an omission, and an edit from a route
+// written exactly as it already is.
+func existingRoutes(ctx context.Context, tx *sql.Tx) (map[string]storedRoute, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT name, description, match_users, match_teams, match_tools, target_model, serves_over_soft
+		FROM model_routes`)
 	if err != nil {
 		return nil, fmt.Errorf("store: read existing routes: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	out := make(map[string]struct{})
+	out := make(map[string]storedRoute)
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var (
+			name                string
+			r                   storedRoute
+			users, teams, tools string
+		)
+		if err := rows.Scan(&name, &r.description, &users, &teams, &tools, &r.target, &r.servesOverSoft); err != nil {
 			return nil, fmt.Errorf("store: scan existing route: %w", err)
 		}
-		out[name] = struct{}{}
+		for _, l := range []struct {
+			text string
+			into *[]string
+		}{{users, &r.users}, {teams, &r.teams}, {tools, &r.tools}} {
+			list, derr := decodeList(l.text)
+			if derr != nil {
+				return nil, fmt.Errorf("store: route %q has an unreadable condition: %w", name, derr)
+			}
+			*l.into = list
+		}
+		out[name] = r
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store: read existing routes: %w", err)
 	}
 	return out, nil
+}
+
+// same reports whether writing r over this row would change it. An empty
+// condition and an absent one are the same condition, which is how the row
+// stores them both.
+func (s storedRoute) same(r policy.Route) bool {
+	return s.description == r.Description &&
+		slices.Equal(s.users, r.Users) && slices.Equal(s.teams, r.Teams) && slices.Equal(s.tools, r.Tools) &&
+		s.target == r.Target.String() && s.servesOverSoft == r.ServesOverSoft
 }
 
 // applyRoutes writes the document's routes, and removes the ones it does not
@@ -303,32 +373,39 @@ func existingRouteNames(ctx context.Context, tx *sql.Tx) (map[string]struct{}, e
 // somebody deleted, and leaving it behind would mean a document could only ever
 // add. That is the same rule the budgets half applies, and it is why applying a
 // document is safe to do from CI on every deploy.
-func (db *DB) applyRoutes(ctx context.Context, tx *sql.Tx, routes []policy.Route, now time.Time) (added, updated, removed int, err error) {
-	existing, err := existingRouteNames(ctx, tx)
+func (db *DB) applyRoutes(ctx context.Context, tx *sql.Tx, routes []policy.Route, now time.Time) (PolicyChanges, error) {
+	var c PolicyChanges
+	existing, err := existingRoutes(ctx, tx)
 	if err != nil {
-		return 0, 0, 0, err
+		return c, err
 	}
 
 	keep := make(map[string]struct{}, len(routes))
 	for _, r := range routes {
 		if verr := r.Validate(); verr != nil {
-			return 0, 0, 0, fmt.Errorf("store: route %q: %w", r.Name, verr)
+			return c, fmt.Errorf("store: route %q: %w", r.Name, verr)
 		}
 		keep[r.Name] = struct{}{}
 
+		stored, found := existing[r.Name]
+		if found && stored.same(r) {
+			c.Unchanged++
+			continue
+		}
+
 		users, merr := encodeList(r.Users)
 		if merr != nil {
-			return 0, 0, 0, fmt.Errorf("store: encode the user condition for %q: %w", r.Name, merr)
+			return c, fmt.Errorf("store: encode the user condition for %q: %w", r.Name, merr)
 		}
 		teams, merr := encodeList(r.Teams)
 		if merr != nil {
-			return 0, 0, 0, fmt.Errorf("store: encode the team condition for %q: %w", r.Name, merr)
+			return c, fmt.Errorf("store: encode the team condition for %q: %w", r.Name, merr)
 		}
 		tools, merr := encodeList(r.Tools)
 		if merr != nil {
-			return 0, 0, 0, fmt.Errorf("store: encode the tool condition for %q: %w", r.Name, merr)
+			return c, fmt.Errorf("store: encode the tool condition for %q: %w", r.Name, merr)
 		}
-		if _, ok := existing[r.Name]; ok {
+		if found {
 			if _, uerr := tx.ExecContext(ctx, db.rebind(`
 				UPDATE model_routes SET
 					description = ?, match_users = ?, match_teams = ?, match_tools = ?,
@@ -337,9 +414,9 @@ func (db *DB) applyRoutes(ctx context.Context, tx *sql.Tx, routes []policy.Route
 				WHERE name = ?`),
 				r.Description, users, teams, tools,
 				r.Target.String(), r.ServesOverSoft, now, r.Name); uerr != nil {
-				return 0, 0, 0, fmt.Errorf("store: update route %q: %w", r.Name, uerr)
+				return c, fmt.Errorf("store: update route %q: %w", r.Name, uerr)
 			}
-			updated++
+			c.Updated++
 		} else {
 			if _, ierr := tx.ExecContext(ctx, db.rebind(`
 				INSERT INTO model_routes (name, description, match_users, match_teams, match_tools,
@@ -348,9 +425,9 @@ func (db *DB) applyRoutes(ctx context.Context, tx *sql.Tx, routes []policy.Route
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 				r.Name, r.Description, users, teams, tools,
 				r.Target.String(), r.ServesOverSoft, "policy file", now, now); ierr != nil {
-				return 0, 0, 0, fmt.Errorf("store: insert route %q: %w", r.Name, ierr)
+				return c, fmt.Errorf("store: insert route %q: %w", r.Name, ierr)
 			}
-			added++
+			c.Added++
 		}
 	}
 
@@ -359,12 +436,12 @@ func (db *DB) applyRoutes(ctx context.Context, tx *sql.Tx, routes []policy.Route
 			continue
 		}
 		if _, derr := tx.ExecContext(ctx, db.rebind(`DELETE FROM model_routes WHERE name = ?`), name); derr != nil {
-			return 0, 0, 0, fmt.Errorf("store: delete route %q: %w", name, derr)
+			return c, fmt.Errorf("store: delete route %q: %w", name, derr)
 		}
-		removed++
+		c.Removed++
 	}
 
-	return added, updated, removed, nil
+	return c, nil
 }
 
 // SaveBudget creates a budget or changes one, matched on what it governs.
@@ -389,12 +466,13 @@ func (db *DB) SaveBudget(ctx context.Context, b policy.Budget) (string, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
-	existing, err := existingBudgetIDs(ctx, tx)
+	existing, err := existingBudgets(ctx, tx)
 	if err != nil {
 		return "", err
 	}
 
-	id, found := existing[budgetKey{b.Scope, b.ScopeID, string(b.Period)}]
+	stored, found := existing[budgetKey{b.Scope, b.ScopeID, string(b.Period)}]
+	id := stored.id
 	if found {
 		if _, uerr := tx.ExecContext(ctx, db.rebind(`
 			UPDATE budgets SET
@@ -455,21 +533,45 @@ func insertBudget(ctx context.Context, tx *sql.Tx, db *DB, id string, b policy.B
 // budgetKey is a budget's stable identity: what it governs, over what window.
 type budgetKey struct{ scope, scopeID, period string }
 
-func existingBudgetIDs(ctx context.Context, tx *sql.Tx) (map[budgetKey]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id, scope, scope_id, period FROM budgets`)
+// storedBudget is a budget row: its id, and the columns a write can change.
+type storedBudget struct {
+	id                   string
+	name                 string
+	enabled              bool
+	softLimit, hardLimit sql.NullInt64
+}
+
+// same reports whether writing b over this row would change it.
+func (s storedBudget) same(b policy.Budget) bool {
+	return s.name == b.Name && s.enabled == b.Enabled &&
+		sameMoney(s.softLimit, b.SoftLimit) && sameMoney(s.hardLimit, b.HardLimit)
+}
+
+func sameMoney(stored sql.NullInt64, m *pricing.Money) bool {
+	if m == nil {
+		return !stored.Valid
+	}
+	return stored.Valid && stored.Int64 == int64(*m)
+}
+
+func existingBudgets(ctx context.Context, tx *sql.Tx) (map[budgetKey]storedBudget, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, scope, scope_id, period, name, enabled, soft_limit_nanos, hard_limit_nanos
+		FROM budgets`)
 	if err != nil {
 		return nil, fmt.Errorf("store: read existing budgets: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	out := make(map[budgetKey]string)
+	out := make(map[budgetKey]storedBudget)
 	for rows.Next() {
-		var id string
+		var s storedBudget
 		var k budgetKey
-		if err := rows.Scan(&id, &k.scope, &k.scopeID, &k.period); err != nil {
+		if err := rows.Scan(&s.id, &k.scope, &k.scopeID, &k.period,
+			&s.name, &s.enabled, &s.softLimit, &s.hardLimit); err != nil {
 			return nil, fmt.Errorf("store: scan existing budget: %w", err)
 		}
-		out[k] = id
+		out[k] = s
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store: read existing budgets: %w", err)
@@ -477,10 +579,11 @@ func existingBudgetIDs(ctx context.Context, tx *sql.Tx) (map[budgetKey]string, e
 	return out, nil
 }
 
-func (db *DB) applyBudgets(ctx context.Context, tx *sql.Tx, budgets []policy.Budget, now time.Time) (added, updated, removed int, err error) {
-	existing, err := existingBudgetIDs(ctx, tx)
+func (db *DB) applyBudgets(ctx context.Context, tx *sql.Tx, budgets []policy.Budget, now time.Time) (PolicyChanges, error) {
+	var c PolicyChanges
+	existing, err := existingBudgets(ctx, tx)
 	if err != nil {
-		return 0, 0, 0, err
+		return c, err
 	}
 
 	keep := make(map[budgetKey]struct{}, len(budgets))
@@ -488,7 +591,11 @@ func (db *DB) applyBudgets(ctx context.Context, tx *sql.Tx, budgets []policy.Bud
 		k := budgetKey{b.Scope, b.ScopeID, string(b.Period)}
 		keep[k] = struct{}{}
 
-		if id, ok := existing[k]; ok {
+		if stored, ok := existing[k]; ok {
+			if stored.same(b) {
+				c.Unchanged++
+				continue
+			}
 			_, err = tx.ExecContext(ctx, db.rebind(`
 				UPDATE budgets SET
 					name = ?, enabled = ?,
@@ -497,31 +604,31 @@ func (db *DB) applyBudgets(ctx context.Context, tx *sql.Tx, budgets []policy.Bud
 				WHERE id = ?`),
 				b.Name, b.Enabled,
 				nullMoney(b.SoftLimit), nullMoney(b.HardLimit),
-				now, id)
+				now, stored.id)
 			if err != nil {
-				return 0, 0, 0, fmt.Errorf("store: update budget %q: %w", b.Label(), err)
+				return c, fmt.Errorf("store: update budget %q: %w", b.Label(), err)
 			}
-			updated++
+			c.Updated++
 			continue
 		}
 
 		if ierr := insertBudget(ctx, tx, db, NewID("bdg"), b, now); ierr != nil {
-			return 0, 0, 0, ierr
+			return c, ierr
 		}
-		added++
+		c.Added++
 	}
 
-	for k, id := range existing {
+	for k, stored := range existing {
 		if _, ok := keep[k]; ok {
 			continue
 		}
-		if _, err = tx.ExecContext(ctx, db.rebind(`DELETE FROM budgets WHERE id = ?`), id); err != nil {
-			return 0, 0, 0, fmt.Errorf("store: delete %s budget: %w", k.scope, err)
+		if _, err = tx.ExecContext(ctx, db.rebind(`DELETE FROM budgets WHERE id = ?`), stored.id); err != nil {
+			return c, fmt.Errorf("store: delete %s budget: %w", k.scope, err)
 		}
-		removed++
+		c.Removed++
 	}
 
-	return added, updated, removed, nil
+	return c, nil
 }
 
 // money converts a nullable rate column into an optional amount.

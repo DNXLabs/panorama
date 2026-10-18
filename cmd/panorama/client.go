@@ -122,7 +122,7 @@ func loginCmd(ctx context.Context, args []string) error {
 	url := fs.String("url", "", "the Panorama deployment to sign in to, e.g. https://panorama.example.internal")
 	name := fs.String("name", "", "what to call this machine in the console (default: its hostname)")
 	noBrowser := fs.Bool("no-browser", false, "print the URL instead of opening a browser")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 
@@ -249,7 +249,7 @@ func tokenCmd(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("panorama token", flag.ContinueOnError)
 	url := fs.String("url", "", "the deployment to get a token for (default: the one you signed in to)")
 	quiet := fs.Bool("quiet", false, "print only the token")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 
@@ -321,7 +321,7 @@ func printToken(dep *deployment, quiet bool) {
 func whoamiCmd(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("panorama whoami", flag.ContinueOnError)
 	url := fs.String("url", "", "the deployment to ask")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 
@@ -366,7 +366,7 @@ func whoamiCmd(ctx context.Context, args []string) error {
 func logoutCmd(args []string) error {
 	fs := flag.NewFlagSet("panorama logout", flag.ContinueOnError)
 	url := fs.String("url", "", "the deployment to sign out of")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 

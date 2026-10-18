@@ -113,7 +113,7 @@ func ssoProbe(ctx context.Context, cfg config.Config, args []string) error {
 	groupsClaim := fs.String("groups-claim", "", "token claim carrying group membership, overriding the preset's")
 	write := fs.String("write", "", "write the rendered configuration to this file (yaml format only; never writes the secret)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 
@@ -210,7 +210,7 @@ from, restart, then confirm with:
 // ssoDoctor checks the running deployment's connection against what it has seen.
 func ssoDoctor(ctx context.Context, cfg config.Config, log *slog.Logger, args []string) error {
 	fs := flag.NewFlagSet("sso doctor", flag.ContinueOnError)
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 

@@ -189,7 +189,7 @@ func TestPolicyNeverRevealsAnotherPersonsSpend(t *testing.T) {
 		{Scope: policy.ScopeUser, ScopeID: f.developer.ID, Period: policy.PeriodDay, Name: "dev daily", Enabled: true, HardLimit: &limit},
 		{Scope: policy.ScopeUser, ScopeID: f.admin.ID, Period: policy.PeriodDay, Name: "admin daily", Enabled: true, HardLimit: &limit},
 	}}
-	if _, _, _, err := f.db.ApplyPolicy(t.Context(), set); err != nil {
+	if _, err := f.db.ApplyPolicy(t.Context(), set); err != nil {
 		t.Fatalf("apply policy: %v", err)
 	}
 	if err := f.policy.Load(t.Context()); err != nil {

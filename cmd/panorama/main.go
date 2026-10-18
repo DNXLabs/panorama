@@ -697,7 +697,7 @@ func token(ctx context.Context, cfg config.Config, log *slog.Logger, args []stri
 
 	switch args[0] {
 	case "create":
-		if perr := fs.Parse(args[1:]); perr != nil {
+		if perr := parseFlags(fs, args[1:]); perr != nil {
 			return perr
 		}
 		if *email == "" {
@@ -779,7 +779,7 @@ func team(ctx context.Context, cfg config.Config, log *slog.Logger, args []strin
 		name := fs.String("name", "", "team name (required)")
 		slug := fs.String("slug", "", "stable identifier used in policy files (defaults to a slug of the name)")
 		desc := fs.String("description", "", "what this team does")
-		if perr := fs.Parse(args[1:]); perr != nil {
+		if perr := parseFlags(fs, args[1:]); perr != nil {
 			return perr
 		}
 		if *name == "" {
@@ -816,7 +816,7 @@ func team(ctx context.Context, cfg config.Config, log *slog.Logger, args []strin
 		slug := fs.String("team", "", "team slug (required)")
 		email := fs.String("email", "", "email address of the user to add (required)")
 		role := fs.String("role", store.TeamRoleMember, "lead or member")
-		if perr := fs.Parse(args[1:]); perr != nil {
+		if perr := parseFlags(fs, args[1:]); perr != nil {
 			return perr
 		}
 		if *slug == "" || *email == "" {
@@ -870,7 +870,7 @@ func policyCmd(ctx context.Context, cfg config.Config, log *slog.Logger, args []
 	case "check", "apply":
 		fs := flag.NewFlagSet("policy "+args[0], flag.ContinueOnError)
 		file := fs.String("f", "", "policy file to read (required)")
-		if perr := fs.Parse(args[1:]); perr != nil {
+		if perr := parseFlags(fs, args[1:]); perr != nil {
 			return perr
 		}
 		if *file == "" {
@@ -887,13 +887,17 @@ func policyCmd(ctx context.Context, cfg config.Config, log *slog.Logger, args []
 			return nil
 		}
 
-		added, updated, removed, aerr := db.ApplyPolicy(ctx, set)
+		changes, aerr := db.ApplyPolicy(ctx, set)
 		if aerr != nil {
 			return aerr
 		}
-		fmt.Printf("Applied %s: %d added, %d updated, %d removed.\n", *file, added, updated, removed)
-		if removed > 0 {
+		fmt.Printf("Applied %s: %d added, %d updated, %d removed, %d unchanged.\n",
+			*file, changes.Added, changes.Updated, changes.Removed, changes.Unchanged)
+		if changes.Removed > 0 {
 			fmt.Println("\nRemoved entries were not in the file. A policy file is the whole policy.")
+		}
+		if changes.Changed() {
+			fmt.Printf("\nA running gateway serves the change within %s.\n", policy.GenerationPollInterval)
 		}
 		return nil
 

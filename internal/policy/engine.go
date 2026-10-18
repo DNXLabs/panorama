@@ -27,6 +27,18 @@ import (
 // learns about another's.
 const defaultReloadInterval = 30 * time.Second
 
+// GenerationPollInterval is how often a running engine asks storage whether
+// the policy has changed, which bounds how long a route saved by another
+// process - `panorama policy apply` in a one-off task, or the console on
+// another replica - is refused as a name nobody created.
+//
+// A second, because the question is one row and the answer is almost always
+// no, and because somebody who has just saved a route then tries it. The
+// reload interval stays where it is: it is also when spend is reconciled,
+// which is a query over the largest table, and that is the part that has a
+// cost worth amortising.
+const GenerationPollInterval = time.Second
+
 // Set is the policy configuration as one immutable snapshot.
 //
 // It is replaced wholesale rather than mutated, so a request is evaluated
@@ -179,6 +191,10 @@ type Repository interface {
 	// SpendSince totals spend per subject of one scope, since a time. The map
 	// is keyed by scope id; the org scope uses the empty key.
 	SpendSince(ctx context.Context, scope string, since time.Time) (map[string]Spend, error)
+	// PolicyGeneration reads a counter that moves whenever anything LoadPolicy
+	// reads is written, by any process. Its value means nothing; only a change
+	// does.
+	PolicyGeneration(ctx context.Context) (int64, error)
 }
 
 // Options configures an engine.
@@ -193,7 +209,10 @@ type Options struct {
 	// default; negative disables the background loop entirely, which is what
 	// tests want.
 	ReloadInterval time.Duration
-	Logger         *slog.Logger
+	// WatchInterval is how often the running engine asks whether the policy
+	// has changed. Zero uses GenerationPollInterval; tests shorten it.
+	WatchInterval time.Duration
+	Logger        *slog.Logger
 	// Now is injected by tests.
 	Now func() time.Time
 }
@@ -210,6 +229,9 @@ type Engine struct {
 	log       *slog.Logger
 	now       func() time.Time
 	interval  time.Duration
+	watch     time.Duration
+	// generation is the storage generation the snapshot in force was read at.
+	generation atomic.Int64
 }
 
 // New builds an engine. It does not read anything; call Load.
@@ -223,6 +245,9 @@ func New(opts Options) *Engine {
 	if opts.ReloadInterval == 0 {
 		opts.ReloadInterval = defaultReloadInterval
 	}
+	if opts.WatchInterval == 0 {
+		opts.WatchInterval = GenerationPollInterval
+	}
 
 	e := &Engine{
 		repo:      opts.Repository,
@@ -231,6 +256,7 @@ func New(opts Options) *Engine {
 		log:       opts.Logger,
 		now:       opts.Now,
 		interval:  opts.ReloadInterval,
+		watch:     opts.WatchInterval,
 	}
 	e.snap.Store(&Set{})
 	return e
@@ -274,6 +300,13 @@ func (e *Engine) Load(ctx context.Context) error {
 }
 
 // Run keeps the snapshot and the ledger current until the context is cancelled.
+//
+// Two clocks. Every reload interval the policy is re-read and spend
+// reconciled, whatever happened. Every GenerationPollInterval the engine asks
+// whether anything it reads has been written since its snapshot, and reloads at
+// once if so - which is how a route saved by another process is served within
+// a second rather than refused for up to half a minute as a name nobody
+// created. Neither touches the request path: a request reads the snapshot.
 func (e *Engine) Run(ctx context.Context) {
 	if e == nil || e.interval < 0 {
 		return
@@ -281,30 +314,84 @@ func (e *Engine) Run(ctx context.Context) {
 
 	ticker := time.NewTicker(e.interval)
 	defer ticker.Stop()
+	watch := time.NewTicker(e.watch)
+	defer watch.Stop()
+
+	// Said once when watching starts failing and once when it recovers, not
+	// every second in between: the reload interval keeps the snapshot current
+	// meanwhile, and its own failure is logged at its own cadence.
+	watchFailing := false
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-watch.C:
+			generation, err := e.repo.PolicyGeneration(ctx)
+			if err != nil {
+				if ctx.Err() == nil && !watchFailing {
+					e.log.ErrorContext(ctx, "watching for policy changes failed; "+
+						"a change made by another process is served at the next reload instead",
+						"error", err, "reload_interval", e.interval)
+				}
+				watchFailing = true
+				continue
+			}
+			if watchFailing {
+				e.log.InfoContext(ctx, "watching for policy changes again")
+				watchFailing = false
+			}
+			if generation == e.generation.Load() {
+				continue
+			}
+			if !e.refresh(ctx) {
+				// Marked as seen, so a reload that keeps failing is retried at
+				// the reload interval and logged there, rather than every second
+				// burying the line that says why.
+				e.generation.Store(generation)
+				continue
+			}
+			set := e.Snapshot()
+			e.log.InfoContext(ctx, "policy changed; reloaded",
+				"routes", len(set.Routes), "budgets", len(set.Budgets), "generation", e.generation.Load())
 		case <-ticker.C:
-			// A failure here is an interruption to survive, not a reason to stop
-			// enforcing: the engine keeps deciding against the snapshot it
-			// already has, and says loudly that it is stale. Silently continuing
-			// would be the fallback this codebase does not allow.
-			if err := e.reload(ctx); err != nil && ctx.Err() == nil {
-				e.log.ErrorContext(ctx, "reloading policy failed; still enforcing the previous snapshot",
-					"error", err)
-			}
-			if err := e.reconcile(ctx); err != nil && ctx.Err() == nil {
-				e.log.ErrorContext(ctx, "reconciling budget spend failed; still counting this process's own traffic",
-					"error", err)
-			}
+			e.refresh(ctx)
 		}
 	}
 }
 
+// refresh re-reads the policy and reconciles spend, for the background loop.
+//
+// A failure here is an interruption to survive, not a reason to stop
+// enforcing: the engine keeps deciding against the snapshot it already has, and
+// says loudly that it is stale. Silently continuing would be the fallback this
+// codebase does not allow. It reports whether the policy was reloaded.
+func (e *Engine) refresh(ctx context.Context) bool {
+	reloaded := true
+	if err := e.reload(ctx); err != nil {
+		reloaded = false
+		if ctx.Err() == nil {
+			e.log.ErrorContext(ctx, "reloading policy failed; still enforcing the previous snapshot",
+				"error", err)
+		}
+	}
+	if err := e.reconcile(ctx); err != nil && ctx.Err() == nil {
+		e.log.ErrorContext(ctx, "reconciling budget spend failed; still counting this process's own traffic",
+			"error", err)
+	}
+	return reloaded
+}
+
 // reload replaces the policy snapshot from storage.
 func (e *Engine) reload(ctx context.Context) error {
+	// Read before the policy rather than after. A write landing between the
+	// two then leaves the counter ahead of what is recorded here, and the next
+	// poll reloads again; read after, the write could be recorded as seen
+	// without ever having been loaded.
+	generation, err := e.repo.PolicyGeneration(ctx)
+	if err != nil {
+		return fmt.Errorf("policy: read generation: %w", err)
+	}
 	set, err := e.repo.LoadPolicy(ctx)
 	if err != nil {
 		return fmt.Errorf("policy: load: %w", err)
@@ -319,6 +406,7 @@ func (e *Engine) reload(ctx context.Context) error {
 	}
 	set.Index()
 	e.snap.Store(&set)
+	e.generation.Store(generation)
 
 	// Drop ledger windows for budgets that no longer exist, so deleting a
 	// budget does not leave its counters accumulating in memory forever.

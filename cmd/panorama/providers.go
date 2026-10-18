@@ -17,6 +17,7 @@ import (
 
 	"github.com/dnxlabs/panorama/internal/config"
 	"github.com/dnxlabs/panorama/internal/controlplane"
+	"github.com/dnxlabs/panorama/internal/policy"
 	"github.com/dnxlabs/panorama/internal/providers"
 	"github.com/dnxlabs/panorama/internal/providers/bedrock"
 	"github.com/dnxlabs/panorama/internal/store"
@@ -26,7 +27,7 @@ import (
 //
 // The same functions the console calls - controlplane.SaveProvider and
 // CheckProvider - rather than a second implementation of what a change means.
-// A running gateway picks a change up at its next policy reload.
+// A running gateway serves a change within policy.GenerationPollInterval.
 func providersCmd(ctx context.Context, cfg config.Config, log *slog.Logger, args []string) error {
 	if len(args) == 0 {
 		return errors.New("providers: want a subcommand (list, set, check or policy)")
@@ -60,17 +61,14 @@ func providersCmd(ctx context.Context, cfg config.Config, log *slog.Logger, args
 		return listProviders(ctx, db, registry)
 
 	case "set":
-		kind, rest := providerKindArg(args[1:])
 		fs := flag.NewFlagSet("providers set", flag.ContinueOnError)
 		region := fs.String("region", "", "the region this provider invokes, e.g. us-east-1")
 		enabled := fs.String("enabled", "", "true or false; unset leaves it as it is (a new provider is enabled)")
 		betas := fs.String("unsupported-betas", "", "comma-separated beta flags to drop; \"-\" forwards every flag")
 		windows := fs.String("context-windows", "", "model=tokens pairs, comma-separated")
-		if perr := fs.Parse(rest); perr != nil {
+		kind, perr := providerKindArg(fs, args[1:])
+		if perr != nil {
 			return perr
-		}
-		if kind == "" {
-			return fmt.Errorf("providers set: name a provider (%s)", kindList())
 		}
 
 		change := controlplane.ProviderChange{}
@@ -129,18 +127,15 @@ func providersCmd(ctx context.Context, cfg config.Config, log *slog.Logger, args
 			fmt.Printf("\nThese routes point at a model this region does not list: %s\n",
 				strings.Join(saved.Stranded, ", "))
 		}
-		fmt.Println("\nA running gateway picks this up at its next policy reload.")
+		fmt.Printf("\nA running gateway serves this within %s.\n", policy.GenerationPollInterval)
 		return nil
 
 	case "check":
-		kind, rest := providerKindArg(args[1:])
 		fs := flag.NewFlagSet("providers check", flag.ContinueOnError)
 		model := fs.String("model", "", "the model id to invoke; empty picks the cheapest one this gateway can serve")
-		if perr := fs.Parse(rest); perr != nil {
+		kind, perr := providerKindArg(fs, args[1:])
+		if perr != nil {
 			return perr
-		}
-		if kind == "" {
-			return fmt.Errorf("providers check: name a provider (%s)", kindList())
 		}
 
 		svc := pricingService(cfg, db, registry, log)
@@ -205,14 +200,25 @@ func listProviders(ctx context.Context, db *store.DB, registry *providers.Regist
 	return w.Flush()
 }
 
-// providerKindArg takes the provider kind from the first argument, so a
-// command reads `providers set bedrock -region us-east-1` the way a person says
-// it.
-func providerKindArg(args []string) (providers.Kind, []string) {
-	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		return "", args
+// providerKindArg parses a providers subcommand's flags and returns the one
+// argument it takes, the provider kind, from wherever it was written: `providers
+// set bedrock -region us-east-1` the way a person says it, and `providers check
+// -model X bedrock` the way somebody adding a flag to a command they already
+// typed ends up writing it.
+func providerKindArg(fs *flag.FlagSet, args []string) (providers.Kind, error) {
+	positional, err := parseArgs(fs, args)
+	if err != nil {
+		return "", err
 	}
-	return providers.Kind(args[0]), args[1:]
+	switch len(positional) {
+	case 0:
+		return "", fmt.Errorf("%s: name a provider (%s)", fs.Name(), kindList())
+	case 1:
+		return providers.Kind(positional[0]), nil
+	default:
+		return "", fmt.Errorf("%s: name one provider (%s); it was given %q",
+			fs.Name(), kindList(), strings.Join(positional, " "))
+	}
 }
 
 func kindList() string {

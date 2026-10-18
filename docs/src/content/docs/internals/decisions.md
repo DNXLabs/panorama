@@ -96,6 +96,13 @@ reloaded on an interval and incremented as requests complete. A database query
 between a keystroke and the first token is what this gateway promises not to
 do.
 
+Waiting for the interval to see a change is not the price of that. Database
+triggers move a counter on every write to the tables the snapshot is read
+from, and each replica polls that one row every second, beside the request
+path rather than on it. Triggers rather than the code that writes, because
+there are a dozen write paths and the one that forgot would be the change that
+appears to have done nothing.
+
 The cost is stated: a request is priced when it finishes, so a limit is checked
 against spend as of the last completed request, and can be overshot a little.
 
