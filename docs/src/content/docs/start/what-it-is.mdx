@@ -112,11 +112,11 @@ Worth knowing before you plan around it:
 - **Command-line sign-in is built and switched off** in this release. Engineers
   use a 30-day token they mint in the console. See
   [Credentials](/docs/reference/credentials/).
-- **The console needs single sign-on.** Without an identity provider, a
-  one-time setup code opens the part of the console that configures sign-in and
-  model providers, and nothing more. Routes, budgets, analytics and My setup
-  need an account, so the [Quickstart](/docs/start/try-it/) connects an
-  identity provider first.
+- **Without single sign-on, the console is signed in to with a token.** A
+  gateway token minted where Panorama runs opens the whole console, which is
+  enough to evaluate it, but every account is then created by hand. The
+  [Quickstart](/docs/start/try-it/) connects an identity provider first. See
+  [Credentials](/docs/reference/credentials/#sign-in-to-the-console-with-a-gateway-token).
 - **SAML is not implemented.** AWS IAM Identity Center therefore does not work
   as a sign-in provider. See [Single sign-on](/docs/configure/sso/).
 - **Jira is not in v1**, and neither is a Helm chart.

@@ -62,6 +62,10 @@ export type AuthState = {
    *  on a stack reachable from nowhere but the machine running it - the server
    *  refuses to start otherwise - so the gate may offer it plainly. */
   dev_sign_in?: boolean
+  /** Whether a gateway token may be exchanged for a console session. True
+   *  exactly while single sign-on is not configured: the server registers the
+   *  route only then. */
+  token_sign_in?: boolean
 }
 
 export type Cost = {

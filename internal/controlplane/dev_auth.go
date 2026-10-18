@@ -13,9 +13,11 @@ import (
 
 // The development sign-in.
 //
-// This is the one door in Panorama that opens a console session without an
-// identity provider, and everything about it is arranged so that it cannot be
-// open anywhere it should not be:
+// This is the one door in Panorama that opens a console session with no
+// credential at all - the gateway token sign-in (token_sign_in.go) also works
+// without an identity provider, but it is a token somebody minted - and
+// everything about it is arranged so that it cannot be open anywhere it should
+// not be:
 //
 //   - The route is not registered unless `dev.sign_in_as` names an account, so
 //     on every other deployment it is a 404 from the mux rather than a handler

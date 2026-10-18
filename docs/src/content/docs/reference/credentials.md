@@ -12,7 +12,7 @@ The prefix tells you which you are holding.
 
 | Prefix | What it is | Who holds it | Opens |
 | --- | --- | --- | --- |
-| `pnt_` | Gateway token | An engineer's coding tool | Model requests, and the console API as that person |
+| `pnt_` | Gateway token | An engineer's coding tool | Model requests, and the console API as that person. Signs in to the console until single sign-on is configured |
 | `pnk_` | Service token | A CI pipeline | Model requests only, billed to a team |
 | `pnb_` | Setup code | Whoever is setting the deployment up | One setup session, once |
 | `pns_` | Console session | A browser | The console. A cookie you never handle. |
@@ -47,6 +47,18 @@ panorama token create -email you@example.com -role admin
 
 This creates the account if it does not exist. It is how you get a first
 credential on a deployment with no single sign-on.
+
+### Sign in to the console with a gateway token
+
+**Until single sign-on is configured**, the sign-in screen accepts a gateway
+token. Paste it under **Gateway token** and press **Sign in**. You get an
+ordinary console session for the token's owner, with their role, so an
+administrator's token opens every screen. The token keeps working in coding
+tools as before.
+
+Once an identity provider is configured, that field is gone and everybody signs
+in through the provider. Only a personal gateway token is accepted: a service
+token, a command-line grant or a setup code is refused.
 
 ## Service tokens
 

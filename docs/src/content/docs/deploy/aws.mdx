@@ -167,6 +167,25 @@ it, then connect single sign-on as described next.
 The cluster, log group and task family are all named after the stack, so these
 commands assume you called it `panorama`.
 
+### Evaluating without an identity provider
+
+If you have no identity provider to connect yet, skip the setup code and mint
+an administrator's gateway token instead, with the same one-off task and the
+same `NETWORK`:
+
+```sh
+aws ecs run-task --region "$REGION" --cluster panorama --task-definition panorama \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
+  --overrides '{"containerOverrides":[{"name":"panorama","command":["token","create","-email","you@example.com","-role","admin"]}]}'
+```
+
+The token is in that task's log stream. Open the `ConsoleUrl` output, paste it
+under **Gateway token** and press **Sign in**. The console is then yours, as an
+administrator, until you connect single sign-on, at which point the token field
+disappears and you sign in through your provider. Accounts for anybody else
+need a token each, minted the same way. The task's log holds the token, so
+delete that log stream once you have copied it.
+
 ## Connect single sign-on
 
 The stack creates an empty secret for the OIDC connection, and the task

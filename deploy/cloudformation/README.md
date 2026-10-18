@@ -218,10 +218,13 @@ output and enter it. That session configures single sign-on, the group-to-role
 mapping and Bedrock — and nothing else. It creates no account: the first
 account is created by the first sign-in, and it is an administrator.
 
-**Evaluating without single sign-on?** Mint a gateway token instead with
-`panorama token create`, run the same way as the task above. It authenticates a
-coding tool and the console's API, not a browser: the Routing screen, My setup
-and Analytics need a single sign-on account.
+**Evaluating without single sign-on?** Mint an administrator's gateway token
+instead, run the same way as the task above with the command
+`["token","create","-email","you@example.com","-role","admin"]`, and paste it on
+the console's sign-in screen under **Gateway token**. Until single sign-on is
+configured that opens the whole console as that account; once it is, the field
+is gone and everybody signs in through the provider. The token is in the task's
+log stream, so delete the stream once you have copied it.
 
 ---
 

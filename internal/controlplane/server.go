@@ -89,6 +89,13 @@ func (s *Server) Handle(pattern string, h http.Handler) {
 //     that exists only in this deployment's log or an operator's terminal;
 //   - the two OIDC endpoints, because they are the thing that produces
 //     authentication. Both are bound to the browser that started the flow;
+//   - signing in with a gateway token, while single sign-on is not configured.
+//     It is not unauthenticated so much as authenticated by a credential
+//     the browser cannot otherwise present: the token already carries its
+//     owner's full /api/v1 rights, so the session it opens grants nothing
+//     the token did not. It is not registered once an issuer is, so an
+//     organization's identity provider is then the only way into a browser.
+//     See token_sign_in.go;
 //   - the development sign-in, which is the exception that proves the rule: it
 //     authenticates nobody, and the only reason it is defensible is that it is
 //     not registered at all unless an operator asked for it AND this deployment
@@ -127,7 +134,15 @@ func (s *Server) routes() {
 	// unauthenticated one.
 	s.mux.Handle("POST /api/v1/cli/token", s.requireCLISignIn(http.HandlerFunc(s.handleCLIToken)))
 
-	// The development sign-in, and the only route in Panorama that is
+	// Signing in with a gateway token, for a deployment with no identity
+	// provider. Decided at startup, like the development sign-in below,
+	// because the OIDC connection is configuration read once: with an issuer
+	// set the path is a 404 from the mux, not a handler that refuses.
+	if !s.cfg.OIDC.Configured() {
+		s.mux.HandleFunc("POST /api/v1/auth/token", s.handleTokenSignIn)
+	}
+
+	// The development sign-in, the other route in Panorama that is
 	// registered conditionally.
 	//
 	// Registered rather than guarded on purpose: everywhere else this is not

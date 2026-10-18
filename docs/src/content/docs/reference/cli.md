@@ -187,8 +187,9 @@ panorama token create -email you@example.com -role admin    # -name labels the t
 
 It mints a gateway token for somebody and creates their account if it does not
 exist. This is how a deployment with no single sign-on gets its first
-credential. `-role` is `admin`, `manager` or `developer`, and only applies to a
-new account.
+credential, and until single sign-on is configured the console's sign-in
+screen accepts the token. `-role` is `admin`, `manager` or `developer`, and only
+applies to a new account.
 
 On an engineer's own machine:
 

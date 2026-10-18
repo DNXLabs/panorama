@@ -200,6 +200,12 @@ sign-on and the model providers.
 own identities, so there is no local admin user to create. Sign in yourself
 first.
 
+**No identity provider to connect?** You can still follow the rest of this page
+by signing in with a gateway token instead: run the same one-off task with the
+command `["token","create","-email","you@example.com","-role","admin"]` in place
+of `["admin","setup"]`, and paste the token from its log on the sign-in screen.
+See [Evaluating without an identity provider](/docs/deploy/aws/#evaluating-without-an-identity-provider).
+
 You land on **Analytics**. The **setup** chip in the sidebar opens a checklist
 of what a new deployment needs. The next two steps are its required ones.
 
