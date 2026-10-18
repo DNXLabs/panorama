@@ -503,6 +503,8 @@ func classify(err error) error {
 		return nil
 	}
 
+	detail := awsDetail(err)
+
 	var (
 		throttling   *brtypes.ThrottlingException
 		unavailable  *brtypes.ServiceUnavailableException
@@ -519,6 +521,7 @@ func classify(err error) error {
 			Kind:       providers.ErrKindThrottled,
 			StatusCode: http.StatusTooManyRequests,
 			Message:    "the model is rate limited right now",
+			Detail:     detail,
 			Err:        err,
 		}
 	case errors.As(err, &unavailable), errors.As(err, &notReady), errors.As(err, &timeout):
@@ -526,6 +529,7 @@ func classify(err error) error {
 			Kind:       providers.ErrKindUnavailable,
 			StatusCode: http.StatusServiceUnavailable,
 			Message:    "the model is temporarily unavailable",
+			Detail:     detail,
 			Err:        err,
 		}
 	case errors.As(err, &validation):
@@ -533,6 +537,7 @@ func classify(err error) error {
 			Kind:       providers.ErrKindInvalidRequest,
 			StatusCode: http.StatusBadRequest,
 			Message:    "the provider rejected the request",
+			Detail:     detail,
 			Err:        err,
 		}
 	case errors.As(err, &accessDenied):
@@ -540,6 +545,7 @@ func classify(err error) error {
 			Kind:       providers.ErrKindForbidden,
 			StatusCode: http.StatusBadGateway,
 			Message:    "the gateway is not permitted to invoke this model",
+			Detail:     detail,
 			Err:        err,
 		}
 	case errors.As(err, &notFound):
@@ -547,6 +553,7 @@ func classify(err error) error {
 			Kind:       providers.ErrKindNotFound,
 			StatusCode: http.StatusBadGateway,
 			Message:    "the model is not available to this deployment",
+			Detail:     detail,
 			Err:        err,
 		}
 	case errors.Is(err, context.Canceled):
@@ -557,9 +564,30 @@ func classify(err error) error {
 			Kind:       providers.ErrKindUpstream,
 			StatusCode: http.StatusBadGateway,
 			Message:    "the model provider returned an error",
+			Detail:     detail,
 			Err:        err,
 		}
 	}
+}
+
+// awsDetail is AWS's error code and message, without the SDK's wrapping of
+// operation, status and request id around them. It is what an administrator
+// is shown and what the hints are matched against: "Model use case details
+// have not been submitted for this account" is the whole of what they need,
+// and the rest of the error is noise around it. Empty for a failure that never
+// reached AWS, whose error text is then the detail.
+func awsDetail(err error) string {
+	var api interface {
+		ErrorCode() string
+		ErrorMessage() string
+	}
+	if !errors.As(err, &api) {
+		return ""
+	}
+	if msg := api.ErrorMessage(); msg != "" {
+		return api.ErrorCode() + ": " + msg
+	}
+	return api.ErrorCode()
 }
 
 // servesAnthropic refuses a request in any shape but the Anthropic Messages

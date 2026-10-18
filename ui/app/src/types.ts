@@ -840,6 +840,41 @@ export type ProviderRow = {
   catalogue: { models: number; serveable: number; discovered_at?: string }
   /** The routes whose model is on this provider. */
   routes: string[]
+  /** The latest request the provider refused to serve, in its own words. */
+  last_refusal?: ProviderRefusal
+}
+
+/** A request the provider refused - not found, or not permitted - kept for an
+ *  administrator because the engineer who met it was told only to look here. */
+export type ProviderRefusal = {
+  at: string
+  region: string
+  model: string
+  kind: string
+  error: string
+  hint: string
+  request_id: string
+}
+
+/** What Bedrock reports about a refused model's availability. Evidence beside
+ *  the refusal, never a verdict: the agreement reads NOT_AVAILABLE for every
+ *  model nobody has invoked yet. */
+export type ModelAccess = {
+  model: string
+  agreement: string
+  agreement_error?: string
+  authorization: string
+  entitlement: string
+  region: string
+}
+
+/** A model a check tried and the provider refused, for a reason of its own. */
+export type ProviderCheckAttempt = {
+  target: string
+  route?: string
+  error: string
+  hint: string
+  access?: ModelAccess
 }
 
 export type ProvidersData = {
@@ -876,10 +911,15 @@ export type ProviderCheck = {
   ok: boolean
   kind: ProviderKind
   target: string
+  /** The route the checked model was chosen from, when it was a route's. */
+  route?: string
   region: string
   duration_ms?: number
   error?: string
   hint?: string
+  access?: ModelAccess
+  /** Models tried before target and refused, in the order they were tried. */
+  refused: ProviderCheckAttempt[]
 }
 
 /** Who administers the deployment, as a setup session sees them. */

@@ -275,7 +275,8 @@ func TestMessagesMapsProviderFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(string(tt.kind), func(t *testing.T) {
 			h := newFixture(t, &fakeProvider{
-				invokeErr: &providers.Error{Kind: tt.kind, StatusCode: tt.wantStatus, Message: "upstream detail"},
+				invokeErr: &providers.Error{Kind: tt.kind, StatusCode: tt.wantStatus, Message: "upstream detail",
+					Detail: "AccessDeniedException: upstream detail"},
 			})
 
 			rec := h.do(t, `{"model":"`+testModel+`","max_tokens":16,"messages":[]}`)
@@ -298,6 +299,29 @@ func TestMessagesMapsProviderFailures(t *testing.T) {
 			h.drain()
 			if got := h.latest(t); got.Decision != store.DecisionError {
 				t.Errorf("decision = %q, want %q", got.Decision, store.DecisionError)
+			}
+
+			// A refusal is the one failure only an administrator can fix, so
+			// the provider's words are kept for Settings, Model providers - and
+			// nothing else is, since a rejected body or a busy model is not
+			// theirs to act on and its text may quote the request.
+			failures, err := h.db.ProviderFailures(t.Context())
+			if err != nil {
+				t.Fatalf("ProviderFailures: %v", err)
+			}
+			kept, ok := failures[providers.KindBedrock]
+			refusal := tt.kind == providers.ErrKindForbidden || tt.kind == providers.ErrKindNotFound
+			if ok != refusal {
+				t.Fatalf("refusal kept = %t, want %t", ok, refusal)
+			}
+			if refusal {
+				if kept.Message != "AccessDeniedException: upstream detail" || kept.Model != resolvedModel ||
+					kept.Region != "us-east-1" || kept.ErrorKind != string(tt.kind) {
+					t.Errorf("kept %+v, want the provider's words, the model and the region", kept)
+				}
+				if !strings.Contains(body.Error.Message, "Settings, Model providers") {
+					t.Errorf("the engineer was not told where an administrator can see why: %q", body.Error.Message)
+				}
 			}
 		})
 	}

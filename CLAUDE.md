@@ -372,12 +372,26 @@ administrator's, made once there is an administrator. Folding them together
 would ask somebody holding a one-time code to decide which models a company pays
 for and which country its prompts are processed in, and would make the provider
 check impossible to run until a route existed, at the exact moment an operator
-most needs to know whether their credentials work. The check therefore invokes a
-target from that provider's discovered catalogue (servable, streaming,
-available, not `LEGACY`, Anthropic first, cheapest first) rather than a route,
-and records the verification on the provider row. A region change clears it in
-the same statement, because a check that passed in one region says nothing about
-another.
+most needs to know whether their credentials work. The check therefore needs no
+route: it invokes the models of this provider's routes first, when there are
+any, because a check that proved the cheapest model said nothing about the one
+engineers are served and passed seconds before their first request failed; and
+then a target from the discovered catalogue (servable, streaming, available,
+not `LEGACY`, Anthropic first, cheapest first). It **streams** and reads the
+stream to its end, because a coding tool does, and records the verification on
+the provider row. A region change clears it in the same statement, because a
+check that passed in one region says nothing about another.
+
+**A check moves past a model only when the refusal is that model's.** Bedrock
+refuses some models to some accounts ("is not available for this account"), and
+retires others, and neither says anything about the deployment, so the check
+reports the refusal and tries the next candidate, at most three
+(`Descriptor.ModelSpecific`). Every other refusal - credentials, IAM, an SCP,
+Anthropic's use case form, which covers every Anthropic model at once - stops it
+at the first model, because the next would fail identically and the finding
+would be buried under a list. Reporting a model the account is not offered as
+broken credentials is how somebody ends up granting IAM actions to fix a sales
+conversation.
 
 **A check with nothing to pick from reads the catalogue itself, and a catalogue
 it cannot read is its finding.** A laptop with expired credentials fails
@@ -395,6 +409,22 @@ denying `bedrock:InvokeModel`, which is how AWS documents actually blocking a
 model, is **invisible** to it. So the live invocation in the setup step is not a
 nicety: an SCP, a missing `aws-marketplace:Subscribe`, and a wrong identifier all
 arrive as the same `AccessDenied`, and one real request is what tells them apart.
+What tells them apart is the sentence AWS wrote, not the exception: checked
+live, an unsubmitted Anthropic use case form and a retired model are both
+`ResourceNotFoundException`, and a model AWS does not offer the account is
+`AccessDeniedException` while `GetFoundationModelAvailability` reads
+`AUTHORIZED` and `AVAILABLE` for it. So the check shows that call's answer
+beside a refusal as evidence (`providers.AccessReporter`), and never picks a
+model or decides anything from it.
+
+**A refusal reaches the administrator, not the engineer.** A not-found or
+not-permitted invocation tells the engineer only that Bedrock refused the model
+for the deployment's account and where an administrator can see why: AWS's
+words name the account and its roles. The words are kept - `providers.Error.Detail`,
+the latest per provider in `provider_failures`, never a column of `providers`
+because a refused request is not a configuration change - and shown on
+Settings, Model providers with the hint. Only those two kinds are kept, so no
+text derived from a request body is ever stored.
 
 ## The console
 

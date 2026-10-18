@@ -11,6 +11,60 @@ import (
 	"github.com/dnxlabs/panorama/internal/providers"
 )
 
+// TestAProviderKeepsItsLatestRefusal.
+//
+// One row per provider, replaced by the next refusal, and cleared only by a
+// check that invoked the same model in the same region.
+func TestAProviderKeepsItsLatestRefusal(t *testing.T) {
+	eachDialect(t, func(t *testing.T, db *DB) {
+		at := time.Date(2026, 10, 18, 9, 0, 0, 0, time.UTC)
+		first := ProviderFailure{
+			Kind: providers.KindBedrock, Region: "us-east-1", Model: "global.anthropic.claude-haiku-5-5",
+			ErrorKind: "forbidden", Message: "AccessDeniedException: not available for this account",
+			RequestID: "req_1", At: at,
+		}
+		if err := db.RecordProviderFailure(t.Context(), first); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+		second := first
+		second.Model, second.ErrorKind, second.RequestID = "us.anthropic.claude-haiku-4-5-20251001-v1:0", "not_found", "req_2"
+		second.Message = strings.Repeat("é", 2000)
+		second.At = at.Add(time.Minute)
+		if err := db.RecordProviderFailure(t.Context(), second); err != nil {
+			t.Fatalf("record again: %v", err)
+		}
+
+		got, err := db.ProviderFailures(t.Context())
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("got %d rows, want the one latest refusal", len(got))
+		}
+		f := got[providers.KindBedrock]
+		if f.Model != second.Model || f.RequestID != "req_2" || !f.At.Equal(second.At) {
+			t.Errorf("kept %+v, want the second refusal", f)
+		}
+		if len(f.Message) > maxFailureMessage || !strings.HasPrefix(second.Message, f.Message) {
+			t.Errorf("message kept as %d bytes, want it cut on a rune boundary under %d", len(f.Message), maxFailureMessage)
+		}
+
+		// A check that passed on another model says nothing about this one.
+		if err := db.ClearProviderFailure(t.Context(), providers.KindBedrock, "us-east-1", first.Model); err != nil {
+			t.Fatalf("clear: %v", err)
+		}
+		if got, _ := db.ProviderFailures(t.Context()); len(got) != 1 {
+			t.Error("a check on another model cleared the refusal")
+		}
+		if err := db.ClearProviderFailure(t.Context(), providers.KindBedrock, "us-east-1", second.Model); err != nil {
+			t.Fatalf("clear: %v", err)
+		}
+		if got, _ := db.ProviderFailures(t.Context()); len(got) != 0 {
+			t.Error("a check on the refused model did not clear it")
+		}
+	})
+}
+
 func TestProvidersRoundTrip(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *DB) {
 		betas := []string{"redact-thinking-2026-02-12"}

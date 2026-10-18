@@ -218,6 +218,24 @@ missing marketplace subscription and a wrong model id all come back as the same
 `AccessDenied`. One real request for one token is the only check that tells
 them apart.
 
+The request is streamed, as a coding tool's is, and is made against a route's
+model first, so a check cannot pass on a model nobody is served while the
+route's model is refused. What tells the causes apart is the sentence Bedrock
+wrote rather than the error's class: an unsubmitted Anthropic use case form and
+a retired model are both "not found", and a model AWS does not offer the
+account is "access denied" while every availability status Bedrock publishes
+for it reads available. So those statuses are shown beside a refusal as
+evidence and never decide anything, and the check tries another model only
+after a refusal that belongs to one model.
+
+### A refusal is explained to the administrator, not the engineer
+
+When Bedrock refuses a model, the engineer is told that it did and where an
+administrator can see why. Bedrock's reason names the AWS account and its
+roles, so it is kept for **Settings → Model providers** rather than sent to a
+coding tool. Only refusals are kept, and their text is Bedrock's: nothing
+derived from a request body is stored.
+
 ### The API surfaces are relayed, never translated
 
 Anthropic Messages, OpenAI Chat Completions and OpenAI Responses are each

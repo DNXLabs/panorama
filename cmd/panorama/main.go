@@ -333,7 +333,7 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	// is missing is refused per request, naming the deployment as the fault,
 	// and a provider configured in the console starts serving at the next
 	// snapshot rather than at the next restart.
-	if merr := mountDataPlane(cfg, db, log, srv, prices.Table(), policyEngine, search); merr != nil {
+	if merr := mountDataPlane(cfg, db, log, srv, prices.Table(), policyEngine, search, registry); merr != nil {
 		return merr
 	}
 
@@ -550,6 +550,7 @@ func mountDataPlane(
 	prices *pricing.Table,
 	rules *policy.Engine,
 	search *websearch.Service,
+	registry *providers.Registry,
 ) error {
 	extractor, sessions, err := attributionFor(cfg, log)
 	if err != nil {
@@ -563,6 +564,7 @@ func mountDataPlane(
 		Attribution:  extractor,
 		Sessions:     sessions,
 		WebSearch:    search,
+		Hint:         registry.Hint,
 		Logger:       log,
 		MaxBodyBytes: cfg.Server.MaxRequestBytes,
 	})

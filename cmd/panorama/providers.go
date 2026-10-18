@@ -132,7 +132,7 @@ func providersCmd(ctx context.Context, cfg config.Config, log *slog.Logger, args
 
 	case "check":
 		fs := flag.NewFlagSet("providers check", flag.ContinueOnError)
-		model := fs.String("model", "", "the model id to invoke; empty picks the cheapest one this gateway can serve")
+		model := fs.String("model", "", "the model id to invoke; empty tries the routes' models, then the cheapest one this gateway can serve")
 		kind, perr := providerKindArg(fs, args[1:])
 		if perr != nil {
 			return perr
@@ -146,18 +146,48 @@ func providersCmd(ctx context.Context, cfg config.Config, log *slog.Logger, args
 		if cerr != nil {
 			return fmt.Errorf("providers check: %w", cerr)
 		}
+		for _, at := range result.Refused {
+			printRefusal(kind, at.Target, at.Route, result.Region, at.Error, at.Hint, at.Access)
+		}
 		if !result.OK {
-			fmt.Printf("%s could not invoke %s in %s.\n\n  %s\n\n%s\n", kind, dash(result.Target), result.Region,
-				result.Error, result.Hint)
+			printRefusal(kind, result.Target, result.Route, result.Region, result.Error, result.Hint, result.Access)
 			return errFindings
 		}
-		fmt.Printf("%s invoked %s in %s in %s. One token of output.\n",
-			kind, result.Target, result.Region, result.Duration.Round(time.Millisecond))
+		fmt.Printf("%s invoked %s%s in %s in %s, streamed. One token of output.\n",
+			kind, result.Target, routeNote(result.Route), result.Region, result.Duration.Round(time.Millisecond))
+		if len(result.Refused) > 0 {
+			fmt.Println("\nThe deployment can invoke Bedrock; the models above were refused for reasons of their own.")
+		}
 		return nil
 
 	default:
 		return fmt.Errorf("providers: unknown subcommand %q (want list, set, check or policy)", args[0])
 	}
+}
+
+// printRefusal reports one model a check could not invoke: the provider's own
+// words, what to do about them, and - where the provider can say - what it
+// reports about the model's availability, which is evidence and not a verdict.
+func printRefusal(kind providers.Kind, target, route, region, message, hint string, access *providers.ModelAccess) {
+	fmt.Printf("%s could not invoke %s%s in %s.\n\n  %s\n\n%s\n", kind, dash(target), routeNote(route), region,
+		message, hint)
+	if access != nil {
+		fmt.Printf("\nBedrock reports for %s: agreement %s, authorization %s, entitlement %s, region %s.\n",
+			access.Model, dash(access.Agreement), dash(access.Authorization), dash(access.Entitlement),
+			dash(access.Region))
+		if access.AgreementError != "" {
+			fmt.Printf("  The agreement says: %s\n", access.AgreementError)
+		}
+	}
+	fmt.Println()
+}
+
+// routeNote names the route a checked model was chosen from.
+func routeNote(route string) string {
+	if route == "" {
+		return ""
+	}
+	return " (the route " + route + ")"
 }
 
 func listProviders(ctx context.Context, db *store.DB, registry *providers.Registry) error {

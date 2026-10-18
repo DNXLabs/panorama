@@ -6,11 +6,13 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dnxlabs/panorama/internal/providers"
 	"github.com/dnxlabs/panorama/internal/store"
@@ -515,31 +517,63 @@ func TestDiscoveryWritesTheProvidersCatalogue(t *testing.T) {
 // recordingProvider answers a live check and remembers what it was asked to
 // invoke, and serves as the catalogue a test hands it.
 type recordingProvider struct {
-	mu        sync.Mutex
-	invoked   []string
-	apis      []providers.API
-	err       error
+	mu      sync.Mutex
+	invoked []string
+	apis    []providers.API
+	err     error
+	// failFor fails particular models, ahead of err.
+	failFor   map[string]error
 	catalogue []providers.CatalogueEntry
 	// catalogueErr is what discovery fails with, when a test wants it to.
 	catalogueErr error
+	// access is what ModelAccess reports, and accessAsked which models it
+	// was asked about.
+	access      providers.ModelAccess
+	accessAsked []string
 }
 
 func (p *recordingProvider) Name() string { return "bedrock" }
 
-func (p *recordingProvider) Invoke(_ context.Context, req *providers.Request) (*providers.Response, error) {
+func (p *recordingProvider) Invoke(context.Context, *providers.Request) (*providers.Response, error) {
+	return nil, errors.New("the provider check streams, as an engineer's tool does")
+}
+
+func (p *recordingProvider) InvokeStream(_ context.Context, req *providers.Request) (providers.EventStream, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.invoked = append(p.invoked, req.Model)
 	p.apis = append(p.apis, req.API)
+	if err, ok := p.failFor[req.Model]; ok {
+		return nil, err
+	}
 	if p.err != nil {
 		return nil, p.err
 	}
-	return &providers.Response{Body: []byte(`{}`)}, nil
+	return &endedStream{}, nil
 }
 
-func (p *recordingProvider) InvokeStream(context.Context, *providers.Request) (providers.EventStream, error) {
-	return nil, errors.New("the setup check never streams")
+func (p *recordingProvider) ModelAccess(_ context.Context, model string) (providers.ModelAccess, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.accessAsked = append(p.accessAsked, model)
+	access := p.access
+	access.Model = model
+	return access, nil
 }
+
+// endedStream is a stream that has one event and then ends, which is all the
+// check reads.
+type endedStream struct{ read bool }
+
+func (s *endedStream) Next() ([]byte, error) {
+	if s.read {
+		return nil, io.EOF
+	}
+	s.read = true
+	return []byte(`{"type":"message_stop"}`), nil
+}
+func (s *endedStream) Usage() providers.Usage { return providers.Usage{} }
+func (s *endedStream) Close() error           { return nil }
 
 func (p *recordingProvider) Catalogue(context.Context) ([]providers.CatalogueEntry, error) {
 	p.mu.Lock()
@@ -582,9 +616,10 @@ func testDescriptors(p *recordingProvider) []providers.Descriptor {
 		}, nil
 	}
 	hint := func(string) string { return "the hint for this failure" }
+	modelSpecific := func(m string) bool { return strings.Contains(m, "is not available for this account") }
 	return []providers.Descriptor{
 		{Kind: providers.KindBedrock, Label: "Amazon Bedrock", Regions: []string{"us-east-1"},
-			Build: build, Hint: hint, Policy: `{"Statement":[]}`,
+			Build: build, Hint: hint, ModelSpecific: modelSpecific, Policy: `{"Statement":[]}`,
 			Endpoint: func(r string) string { return "bedrock-runtime." + r + ".amazonaws.com" }},
 		{Kind: providers.KindBedrockMantle, Label: "Amazon Bedrock (Mantle)", Regions: []string{"us-east-1"},
 			Build: build, Hint: hint, Policy: `{"Statement":[]}`},
@@ -809,5 +844,138 @@ func TestAFailedCheckCarriesTheHint(t *testing.T) {
 	}
 	if got := setupStates(t, f)["provider"]; got != stateTodo {
 		t.Errorf("provider = %q after a failed check, want todo", got)
+	}
+}
+
+// refused is how Bedrock's two kinds of refusal arrive from the provider: a
+// classified error carrying AWS's own words.
+func refused(kind providers.ErrorKind, detail string) error {
+	return &providers.Error{Kind: kind, StatusCode: http.StatusBadGateway, Message: "refused", Detail: detail,
+		Err: errors.New(detail)}
+}
+
+// TestTheCheckTriesARoutesModelFirst.
+//
+// A check that proved the cheapest model in the catalogue said nothing about
+// the one engineers are routed to, and a deployment passed its check and then
+// failed every real request on the route's model seconds later. The route's
+// model is what is checked, and the check says which route it came from.
+func TestTheCheckTriesARoutesModelFirst(t *testing.T) {
+	f := newConsole(t)
+	seedCatalogue(t, f)
+	if rec, _ := f.send(t, http.MethodPut, "/api/v1/routes", f.adminToken, map[string]any{
+		"name": "fast", "target": auHaiku,
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("create route = %d", rec.Code)
+	}
+
+	_, body := f.send(t, http.MethodPost, "/api/v1/providers/bedrock/check", f.adminToken, map[string]string{})
+	if ok, _ := body["ok"].(bool); !ok {
+		t.Fatalf("check reported failure: %v", body)
+	}
+	if len(f.provider.invoked) != 1 || f.provider.invoked[0] != "au.anthropic.claude-haiku-4-5-20251001-v1:0" {
+		t.Errorf("invoked %v, want the route's model and not the cheaper global profile", f.provider.invoked)
+	}
+	if got, _ := body["route"].(string); got != "fast" {
+		t.Errorf("route = %q, want the route the model was chosen from", got)
+	}
+}
+
+// TestTheCheckMovesPastAModelThisAccountIsNotOffered.
+//
+// AWS refuses some models to some accounts - the newest Haiku, in the
+// deployment this was found on - with an AccessDenied that no IAM change
+// grants. The check reported that as the deployment's credentials failing.
+// Now it says which model was refused and why, with what Bedrock reports about
+// the model's availability beside it, and tries the next one: a deployment
+// that can invoke anything works.
+func TestTheCheckMovesPastAModelThisAccountIsNotOffered(t *testing.T) {
+	f := newConsole(t)
+	seedCatalogue(t, f)
+	notOffered := "AccessDeniedException: anthropic.claude-haiku-4-5-20251001-v1:0 is not available for this account."
+	f.provider.failFor = map[string]error{
+		"global.anthropic.claude-haiku-4-5-20251001-v1:0": refused(providers.ErrKindForbidden, notOffered),
+	}
+	f.provider.access = providers.ModelAccess{Agreement: "NOT_AVAILABLE", Authorization: "AUTHORIZED",
+		Entitlement: "AVAILABLE", Region: "AVAILABLE"}
+
+	_, body := f.send(t, http.MethodPost, "/api/v1/providers/bedrock/check", f.adminToken, map[string]string{})
+	if ok, _ := body["ok"].(bool); !ok {
+		t.Fatalf("a deployment that invoked a model reported failure: %v", body)
+	}
+	if got, _ := body["target"].(string); got != "au.anthropic.claude-haiku-4-5-20251001-v1:0" {
+		t.Errorf("verified against %q, want the next model", got)
+	}
+	list := mapsOf(body["refused"])
+	if len(list) != 1 {
+		t.Fatalf("refused = %v, want the one model that was refused", body["refused"])
+	}
+	if list[0]["target"] != "global.anthropic.claude-haiku-4-5-20251001-v1:0" || list[0]["error"] != notOffered {
+		t.Errorf("refused[0] = %v, want the model and AWS's own words", list[0])
+	}
+	access, _ := list[0]["access"].(map[string]any)
+	// Asked about the foundation model behind the profile, which is what the
+	// availability belongs to.
+	if access["model"] != "anthropic.claude-haiku-4-5-20251001-v1:0" || access["authorization"] != "AUTHORIZED" {
+		t.Errorf("access = %v, want what the provider reported about the foundation model", access)
+	}
+}
+
+// TestTheCheckStopsAtARefusalThatIsNotTheModels.
+//
+// Anthropic's use case form, an SCP or a missing permission fails every model
+// the same way, so trying another would spend a second request to learn
+// nothing - and would bury the finding under a list.
+func TestTheCheckStopsAtARefusalThatIsNotTheModels(t *testing.T) {
+	f := newConsole(t)
+	seedCatalogue(t, f)
+	form := "ResourceNotFoundException: Model use case details have not been submitted for this account."
+	f.provider.err = refused(providers.ErrKindNotFound, form)
+
+	_, body := f.send(t, http.MethodPost, "/api/v1/providers/bedrock/check", f.adminToken, map[string]string{})
+	if ok, _ := body["ok"].(bool); ok {
+		t.Fatal("a refused invocation reported success")
+	}
+	if len(f.provider.invoked) != 1 {
+		t.Errorf("invoked %v, want one model: this refusal is the account's, not the model's", f.provider.invoked)
+	}
+	if got, _ := body["error"].(string); got != form {
+		t.Errorf("error = %q, want AWS's own words without the SDK around them", got)
+	}
+	if _, ok := body["access"].(map[string]any); !ok {
+		t.Error("a refusal carries no availability evidence")
+	}
+}
+
+// TestTheLatestRefusalIsShownToAnAdministrator.
+//
+// The engineer whose request Bedrock refused is told to look here, so here has
+// to say what Bedrock said - and stop saying it once a check has invoked that
+// model, since it is then no longer why anything is failing.
+func TestTheLatestRefusalIsShownToAnAdministrator(t *testing.T) {
+	f := newConsole(t)
+	seedCatalogue(t, f)
+	model := "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+	form := "ResourceNotFoundException: Model use case details have not been submitted for this account."
+	if err := f.db.RecordProviderFailure(t.Context(), store.ProviderFailure{
+		Kind: providers.KindBedrock, Region: "us-east-1", Model: model, ErrorKind: "not_found",
+		Message: form, RequestID: "req_refused", At: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, body := f.send(t, http.MethodGet, "/api/v1/providers", f.adminToken, nil)
+	last, _ := providerRows(t, body)["bedrock"]["last_refusal"].(map[string]any)
+	if last["error"] != form || last["model"] != model || last["request_id"] != "req_refused" {
+		t.Fatalf("last_refusal = %v, want Bedrock's words, the model and the request", last)
+	}
+	if hint, _ := last["hint"].(string); hint == "" {
+		t.Error("the refusal carries no hint")
+	}
+
+	f.send(t, http.MethodPost, "/api/v1/providers/bedrock/check", f.adminToken, map[string]string{"model": model})
+	_, body = f.send(t, http.MethodGet, "/api/v1/providers", f.adminToken, nil)
+	if last, ok := providerRows(t, body)["bedrock"]["last_refusal"]; ok {
+		t.Errorf("after a check invoked the refused model, the screen still shows %v", last)
 	}
 }
