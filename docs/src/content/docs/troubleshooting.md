@@ -99,8 +99,13 @@ sign-on, check the model providers, and, under **Administrators**, make an
 account an administrator again. It cannot reach anything else, by design. See
 [Credentials](/docs/reference/credentials/#setup-codes).
 
-**On your own laptop with no identity provider**, use the development sign-in.
-See [On your laptop](/docs/deploy/laptop/#start-it).
+**On a deployment with no identity provider**, sign in with a gateway token:
+mint one with `panorama token create -email you@example.com -role admin` where
+the deployment runs, and paste it on the sign-in screen. See
+[Sign in to the console with a gateway token](/docs/reference/credentials/#sign-in-to-the-console-with-a-gateway-token).
+
+**On your own laptop with no identity provider**, the development sign-in is
+quicker. See [On your laptop](/docs/deploy/laptop/#start-it).
 
 ## A command succeeded and nothing changed
 

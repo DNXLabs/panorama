@@ -312,6 +312,11 @@ created by that first sign-in.** Panorama does not own identities, so there is n
 local admin user to create. If you get locked out, `panorama admin setup` issues a
 fresh code at any time.
 
+**Evaluating with no identity provider?** `panorama token create -email
+you@example.com -role admin`, run where the deployment runs, mints an
+administrator's gateway token. Until SSO is configured, the sign-in screen takes
+that token and opens the whole console; once it is, only SSO signs anybody in.
+
 Once it works, confirm it:
 
 ```sh

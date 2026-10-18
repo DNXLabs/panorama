@@ -591,6 +591,19 @@ shape.
 
 - **Gateway tokens** (`pnt_`) are what a coding tool holds. They also
   authenticate the console API, for scripts and for a deployment before SSO.
+
+  **Until SSO is configured, one also signs a browser in.** `POST
+  /api/v1/auth/token` exchanges a personal gateway token for an ordinary
+  console session as its owner, which is how a deployment evaluated without an
+  identity provider is used at all: `panorama token create` makes the account
+  and the token, and the gate takes it. It grants nothing the token did not
+  already reach through `/api/v1`. It is registered only while
+  `oidc.issuer` is empty, decided at startup like the development sign-in, so
+  a deployment behind its identity provider (and that provider's MFA) has no
+  second door a dotfile token would open. It takes `pnt_` only, refuses any
+  body that is not `application/json` (a cross-site form could otherwise sign a
+  victim in as the attacker), and shares the setup code's limiter. See
+  `token_sign_in.go`.
   Minted by hand in the console, or — the recommended path — by a CLI grant,
   short-lived and rotating.
 
@@ -1282,7 +1295,9 @@ gateway without the product.
 **Two facts the manual and the README both depend on.** Without single sign-on, a setup code reaches the
 identity connection, the model providers and the administrators list, which are
 the routes wrapped in `setup(...)` in `admin.go`, and nothing else. A gateway
-token authenticates `/api/v1` and not a browser. The Quickstart therefore
+token authenticates `/api/v1`, and signs a browser in to the console only
+until single sign-on is configured; it is the evaluation path, not the
+product's. The Quickstart therefore
 connects single sign-on before anything else, and nothing seeds a route, so its
 route step says plainly that every request is refused until one exists. And service tokens have no screen; they are created through
 `POST /api/v1/service-tokens`, which is the one task the manual sends an

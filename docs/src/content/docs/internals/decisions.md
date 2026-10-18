@@ -188,6 +188,29 @@ by the first sign-in. Bootstrapping uses a one-time setup code that opens a
 session and not an account, because a bootstrap administrator would be the one
 row contradicting everything else.
 
+### Without single sign-on, a gateway token signs in to the console
+
+A deployment being evaluated often has no identity provider yet, and the setup
+code reaches only sign-in and the model providers. Routes, analytics and My
+setup need an account. The account comes from `panorama token create`, run
+where the deployment runs, and the token it prints is pasted on the sign-in
+screen, which exchanges it for an ordinary console session.
+
+That grants nothing new. A gateway token already reaches every part of the
+console's API as its owner, so a session opened with it is that person's, with
+their role. The alternatives each added something: a local administrator with a
+password is a second credential guarding a door the command that would reset it
+already guards, and letting the development sign-in run on a server would put
+an administrator session behind no credential at all.
+
+It stops as soon as single sign-on is configured: the sign-in route is not
+there at all, so an organization that put its console behind its identity
+provider, and that provider's multi-factor checks, has no second way in beside
+it that a token in somebody's dotfile would open. It accepts a personal gateway
+token only, never a service token, a command-line grant or a setup code, and
+only as a JSON request, so a form on another site cannot sign somebody's browser
+in to an account it chose.
+
 ## Providers
 
 ### The IAM role grants every region
