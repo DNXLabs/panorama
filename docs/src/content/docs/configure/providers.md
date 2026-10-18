@@ -26,13 +26,22 @@ In **Settings → Model providers**, on the provider's block:
    it offers and tells you how many models it lists.
 2. Press **Turn on**. Panorama reads the region's model catalogue and starts
    fetching its prices.
-3. Press **Check**. This makes one real request, for one token of output, on
-   the cheapest model it can serve. The state changes from `never checked` to
-   `connected`.
+3. Press **Check**. This makes one real request, streamed, for one token of
+   output: on the model of a route on this provider if there is one, otherwise
+   on the cheapest model it can serve. The state changes from `never checked`
+   to `connected`.
 
 Do not skip the check. A role that looks right and a role that works are told
 apart by one real request and by nothing else, because no AWS API reports a
-service control policy that blocks invocation.
+service control policy that blocks invocation. When it fails, Bedrock's own
+words are on the block; see
+[The provider check fails](/docs/troubleshooting/#the-provider-check-fails).
+
+If Bedrock refuses a model to this account, for example because the
+[Anthropic use case form](/docs/troubleshooting/#the-anthropic-use-case-form)
+has not been submitted, the check says which and why, and tries another model
+when the refusal belongs to that model alone. The same block later shows the
+**last refused request**, when an engineer's request is the one refused.
 
 From a shell:
 

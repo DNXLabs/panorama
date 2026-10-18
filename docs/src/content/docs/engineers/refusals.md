@@ -115,8 +115,14 @@ quota for that model is too low, or another route would spread the load.
 points at a model or a provider that is not available. Send the `request_id` to
 an administrator.
 
-The same goes for *"Panorama is not permitted to invoke that model"* and
-*"That model is not available to this Panorama deployment"*.
+## "Bedrock refused this model for this Panorama deployment's AWS account"
+
+**502.** Amazon Bedrock would not serve the route's model to the AWS account
+this deployment runs in. Nothing on your machine will fix it, and switching
+routes helps only if another route's model is not refused too. Send the
+`request_id` to an administrator: they can see Bedrock's reason under
+**Settings → Model providers**. See
+[Engineers report "Bedrock refused this model"](/docs/troubleshooting/#engineers-report-bedrock-refused-this-model).
 
 ## "Panorama does not store responses"
 

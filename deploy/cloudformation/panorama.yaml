@@ -666,6 +666,7 @@ Resources:
                 Action:
                   - bedrock:ListFoundationModels
                   - bedrock:ListInferenceProfiles
+                  - bedrock:GetFoundationModelAvailability
                   - bedrock-mantle:ListModels
                   - bedrock-mantle:GetModel
                   - pricing:GetProducts

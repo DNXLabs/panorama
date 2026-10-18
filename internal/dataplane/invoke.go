@@ -4,6 +4,7 @@
 package dataplane
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -582,12 +583,17 @@ func providerFailure(err error) (status int, errType, kind, message string) {
 	case providers.ErrKindInvalidRequest:
 		return http.StatusBadRequest, errTypeInvalidRequest, string(pe.Kind),
 			"The model provider rejected this request."
-	case providers.ErrKindNotFound:
+	case providers.ErrKindNotFound, providers.ErrKindForbidden:
+		// One sentence for both, because the engineer's next step is the same
+		// and Bedrock's own two classes do not divide the causes anyway: an
+		// unsubmitted use case form and a retired model are both "not found",
+		// an SCP and a model AWS does not offer the account both "denied".
+		// What it was is recorded for an administrator, who is told where to
+		// look rather than asked to "enable" a model - there is nothing to
+		// enable, and that advice sent people to a console page AWS retired.
 		return http.StatusBadGateway, errTypeAPI, string(pe.Kind),
-			"That model is not available to this Panorama deployment. Ask an administrator to enable it."
-	case providers.ErrKindForbidden:
-		return http.StatusBadGateway, errTypeAPI, string(pe.Kind),
-			"Panorama is not permitted to invoke that model. Ask an administrator to check the deployment's model access."
+			"Bedrock refused this model for this Panorama deployment's AWS account. " +
+				"An administrator can see Bedrock's reason under Settings, Model providers."
 	default:
 		return pe.StatusCode, errTypeAPI, string(pe.Kind),
 			"The model provider returned an error."
@@ -596,20 +602,74 @@ func providerFailure(err error) (status int, errType, kind, message string) {
 
 // logProviderFailure records the underlying failure server-side, where the
 // provider's own message is safe to keep.
+//
+// A refusal - not found, not permitted - is also kept as the provider's
+// latest, for Settings, Model providers: it is the one failure an engineer
+// cannot act on and an administrator can, and the administrator does not read
+// this log. Off the request path, like the request row itself.
 func (d *DataPlane) logProviderFailure(
 	r *http.Request, requestID string, target providers.ModelRef, err error, extra ...slog.Attr,
 ) {
+	detail := providers.Detail(err)
 	attrs := append(logAttrs(r.Context()),
 		slog.String("request_id", requestID),
 		slog.String("model", target.Model),
 		slog.String("provider", string(target.Provider)),
 		slog.String("error", err.Error()),
 	)
-	if pe, ok := providers.AsError(err); ok {
+	pe, classified := providers.AsError(err)
+	if classified {
 		attrs = append(attrs, slog.String("kind", string(pe.Kind)))
+	}
+	refusal := providers.Refusal(err)
+	if refusal && d.hint != nil {
+		// Only for a refusal: a hint is matched on the provider's words, and
+		// a stream that broke or a body the model rejected would be matched
+		// to a fix for something else.
+		if hint := d.hint(target.Provider, detail); hint != "" {
+			attrs = append(attrs, slog.String("hint", hint))
+		}
 	}
 	attrs = append(attrs, extra...)
 	d.log.LogAttrs(r.Context(), slog.LevelError, "provider invocation failed", attrs...)
+
+	if refusal {
+		d.recordRefusal(r.Context(), store.ProviderFailure{
+			Kind:      target.Provider,
+			Model:     target.Model,
+			ErrorKind: string(pe.Kind),
+			Message:   detail,
+			RequestID: requestID,
+			At:        time.Now(),
+		})
+	}
+}
+
+// recordRefusal keeps a provider's latest refusal without delaying the
+// client, the way record keeps a request: the response is already on its way,
+// and a failure to keep the row is logged rather than surfaced.
+func (d *DataPlane) recordRefusal(ctx context.Context, f store.ProviderFailure) {
+	if d.store == nil {
+		return
+	}
+	writeCtx := context.WithoutCancel(ctx)
+
+	d.recording.Add(1)
+	go func() {
+		defer d.recording.Done()
+
+		ctx, cancel := context.WithTimeout(writeCtx, 5*time.Second)
+		defer cancel()
+
+		// The region is the snapshot's, read here rather than on the request
+		// path: a refusal is a statement about one region, and the console
+		// says which.
+		f.Region = d.policy.Snapshot().Providers[f.Kind].Settings.Region
+		if err := d.store.RecordProviderFailure(ctx, f); err != nil {
+			d.log.ErrorContext(ctx, "recording a provider refusal",
+				"error", err, "request_id", f.RequestID, "provider", f.Kind, "model", f.Model)
+		}
+	}()
 }
 
 // betasFrom reads the beta feature flags a client asked for.

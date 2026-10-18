@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -320,8 +321,42 @@ type CheckResult struct {
 	Target   string
 	Region   string
 	Duration time.Duration
-	Error    string
-	Hint     string
+	// Route names the route Target was chosen from, when it was a route's
+	// model rather than one named or picked from the catalogue.
+	Route string
+	// Error is the provider's own account of a failure (providers.Detail),
+	// and Hint the fix for it.
+	Error string
+	Hint  string
+	// Access is what the provider says about Target's availability, read
+	// after it refused Target, as evidence beside the refusal.
+	Access *providers.ModelAccess
+	// Refused are the models tried before Target and refused for a reason
+	// particular to each - one AWS does not offer this account, one that has
+	// been retired - in the order they were tried.
+	Refused []CheckAttempt
+}
+
+// CheckAttempt is one model a check tried and the provider refused.
+type CheckAttempt struct {
+	Target string
+	Route  string
+	Error  string
+	Hint   string
+	Access *providers.ModelAccess
+}
+
+// maxCheckAttempts bounds how many models one check invokes. Each is a real
+// request on somebody's account, and three models refused one after another
+// for reasons particular to each is already the finding.
+const maxCheckAttempts = 3
+
+// checkCandidate is a model a check may invoke, and the API it is invoked in.
+type checkCandidate struct {
+	target string
+	api    providers.API
+	// route is the route this model is the target of, or empty.
+	route string
 }
 
 // CheckProvider proves a provider can actually invoke a model.
@@ -334,6 +369,19 @@ type CheckResult struct {
 // same AccessDenied; on bedrock-mantle a role granted everything but the other
 // service's actions looks, from every list AWS publishes, exactly like one that
 // works.
+//
+// It streams, and reads the stream to its end, because that is what an
+// engineer's coding tool does: a check that proved InvokeModel would pass on
+// a role or an account that refuses InvokeModelWithResponseStream, and the
+// first real request would be the one to find out.
+//
+// With no model named, it tries the models the routes on this provider point
+// at first - those are what engineers will actually be served - and then the
+// catalogue's own choice. It moves on to the next only when the provider
+// refused one model for a reason particular to that model, and says which and
+// why: an account AWS has not offered the newest model is an account that
+// works, and reporting it as broken credentials is how somebody ends up
+// granting IAM actions to fix a sales conversation.
 func CheckProvider(ctx context.Context, deps ProviderDeps, kind providers.Kind, model string, prices *pricing.Table) (CheckResult, error) {
 	descriptor, ok := deps.Registry.Descriptor(kind)
 	if !ok {
@@ -360,11 +408,22 @@ func CheckProvider(ctx context.Context, deps ProviderDeps, kind providers.Kind, 
 		return CheckResult{}, err
 	}
 
-	target := strings.TrimSpace(model)
-	var api providers.API
-	if target == "" {
-		row, found := verificationTarget(kind, catalogue, prices)
-		if !found {
+	var candidates []checkCandidate
+	named := strings.TrimSpace(model)
+	if named != "" {
+		list := instance.APIs(named)
+		if len(list) == 0 {
+			return CheckResult{}, refusedf("%s speaks no API this gateway serves on %s, so it cannot be checked.",
+				named, descriptor.Label)
+		}
+		candidates = []checkCandidate{{target: named, api: list[0]}}
+	} else {
+		routes, rerr := deps.DB.ListRoutes(ctx)
+		if rerr != nil {
+			return CheckResult{}, rerr
+		}
+		candidates = checkCandidates(kind, instance, routes, catalogue, prices)
+		if len(candidates) == 0 {
 			// Nothing to try, which on a new deployment nearly always means the
 			// startup discovery failed - and credentials that cannot list models
 			// are the fault this check exists to find. So the provider is asked
@@ -372,7 +431,7 @@ func CheckProvider(ctx context.Context, deps ProviderDeps, kind providers.Kind, 
 			// "refresh the catalogue first" would name a button on another
 			// screen and say nothing about the credentials, to somebody pressing
 			// the one control that says it proves them.
-			row, found, err = discoverVerificationTarget(ctx, deps, kind, instance, prices)
+			catalogue, err = discoverCatalogue(ctx, deps, instance)
 			var failed discoveryFailed
 			if errors.As(err, &failed) {
 				deps.logger().WarnContext(ctx, "provider check could not read the catalogue", "provider", kind,
@@ -383,8 +442,9 @@ func CheckProvider(ctx context.Context, deps ProviderDeps, kind providers.Kind, 
 			if err != nil {
 				return CheckResult{}, err
 			}
+			candidates = checkCandidates(kind, instance, routes, catalogue, prices)
 		}
-		if !found {
+		if len(candidates) == 0 {
 			// Not a failure of the provider, and said as its own sentence so it
 			// is not mistaken for one: it answered, and nothing it lists is
 			// something this gateway can serve.
@@ -392,39 +452,102 @@ func CheckProvider(ctx context.Context, deps ProviderDeps, kind providers.Kind, 
 				"nothing to check with. Choose another region, or name a model identifier to try.",
 				descriptor.Label, settings.Region)
 		}
-		target, api = row.ID, row.APIs[0]
-	} else {
-		if list := instance.APIs(target); len(list) > 0 {
-			api = list[0]
-		} else {
-			return CheckResult{}, refusedf("%s speaks no API this gateway serves on %s, so it cannot be checked.",
-				target, descriptor.Label)
-		}
+	}
+	if len(candidates) > maxCheckAttempts {
+		candidates = candidates[:maxCheckAttempts]
 	}
 
+	result := CheckResult{Region: settings.Region}
+	for i, c := range candidates {
+		took, ierr := invokeForCheck(ctx, instance, c)
+		if ierr == nil {
+			result.OK, result.Target, result.Route, result.Duration = true, c.target, c.route, took
+			if serr := deps.DB.SetProviderVerified(ctx, kind, settings.Region, c.target, time.Now()); serr != nil {
+				return result, serr
+			}
+			// The refusal this model last met is no longer the answer to "why
+			// is this failing". One on another model still might be.
+			if cerr := deps.DB.ClearProviderFailure(ctx, kind, settings.Region, c.target); cerr != nil {
+				return result, cerr
+			}
+			deps.logger().InfoContext(ctx, "provider verified", "provider", kind, "model", c.target,
+				"region", settings.Region, "duration", took, "refused", len(result.Refused))
+			return result, nil
+		}
+
+		detail := providers.Detail(ierr)
+		attempt := CheckAttempt{Target: c.target, Route: c.route, Error: detail, Hint: descriptor.Hint(detail)}
+		if providers.Refusal(ierr) {
+			attempt.Access = modelAccess(ctx, deps, kind, instance, catalogue, c.target)
+		}
+		deps.logger().WarnContext(ctx, "provider check failed", "provider", kind, "model", c.target,
+			"region", settings.Region, "error", ierr, "hint", attempt.Hint)
+
+		modelSpecific := descriptor.ModelSpecific != nil && descriptor.ModelSpecific(detail)
+		if named != "" || i == len(candidates)-1 || !modelSpecific {
+			result.Target, result.Route, result.Duration = c.target, c.route, took
+			result.Error, result.Hint, result.Access = attempt.Error, attempt.Hint, attempt.Access
+			return result, nil
+		}
+		result.Refused = append(result.Refused, attempt)
+	}
+	// Unreachable: the last candidate always returns above.
+	return result, nil
+}
+
+// invokeForCheck makes the check's one streamed request and reads it to the
+// end, so a stream that is refused part way fails the check as it would fail
+// an engineer.
+func invokeForCheck(ctx context.Context, instance *providers.Instance, c checkCandidate) (time.Duration, error) {
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	started := time.Now()
-	_, err = instance.Provider.Invoke(cctx, &providers.Request{API: api, Model: target, Body: checkBody(api)})
-	took := time.Since(started)
-
-	result := CheckResult{Target: target, Region: settings.Region, Duration: took}
+	stream, err := instance.Provider.InvokeStream(cctx, &providers.Request{API: c.api, Model: c.target, Body: checkBody(c.api)})
 	if err != nil {
-		result.Error = err.Error()
-		result.Hint = descriptor.Hint(err.Error())
-		deps.logger().WarnContext(ctx, "provider check failed", "provider", kind, "model", target,
-			"region", settings.Region, "error", err)
-		return result, nil
+		return time.Since(started), err
+	}
+	defer func() { _ = stream.Close() }()
+	for {
+		if _, nerr := stream.Next(); nerr != nil {
+			if errors.Is(nerr, io.EOF) {
+				return time.Since(started), nil
+			}
+			return time.Since(started), nerr
+		}
+	}
+}
+
+// modelAccess asks the provider what it says about a refused model's
+// availability, where it can say anything. Evidence only, so a failure to read
+// it is logged and the check reports the refusal without it.
+func modelAccess(
+	ctx context.Context, deps ProviderDeps, kind providers.Kind, instance *providers.Instance,
+	catalogue []store.CatalogueModel, target string,
+) *providers.ModelAccess {
+	reporter, ok := instance.Catalogue.(providers.AccessReporter)
+	if !ok {
+		return nil
+	}
+	// The foundation model behind a profile, where discovery recorded one:
+	// availability is a property of the model, not of the route to it.
+	model := target
+	for _, m := range catalogue {
+		if m.Provider == kind && m.ID == target && m.FoundationModelID != "" {
+			model = m.FoundationModelID
+			break
+		}
 	}
 
-	if serr := deps.DB.SetProviderVerified(ctx, kind, settings.Region, target, time.Now()); serr != nil {
-		return result, serr
+	actx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	access, err := reporter.ModelAccess(actx, model)
+	if err != nil {
+		deps.logger().WarnContext(ctx, "provider check could not read the model's availability",
+			"provider", kind, "model", model, "error", err)
+		return nil
 	}
-	result.OK = true
-	deps.logger().InfoContext(ctx, "provider verified", "provider", kind, "model", target,
-		"region", settings.Region, "duration", took)
-	return result, nil
+	return &access
 }
 
 // discoveryFailed is a catalogue that could not be read, kept apart from the
@@ -434,29 +557,23 @@ type discoveryFailed struct{ cause error }
 
 func (e discoveryFailed) Error() string { return e.cause.Error() }
 
-// discoverVerificationTarget reads the provider's catalogue on the spot and
-// picks from it, for a check that found nothing stored to pick from. Through
-// jobs.Discover like every other refresh, so the rows it leaves behind are the
-// rows the console's own refresh would have written.
-func discoverVerificationTarget(
-	ctx context.Context, deps ProviderDeps, kind providers.Kind, instance *providers.Instance, prices *pricing.Table,
-) (store.CatalogueModel, bool, error) {
+// discoverCatalogue reads the provider's catalogue on the spot, for a check
+// that found nothing stored to pick from. Through jobs.Discover like every
+// other refresh, so the rows it leaves behind are the rows the console's own
+// refresh would have written.
+func discoverCatalogue(ctx context.Context, deps ProviderDeps, instance *providers.Instance) ([]store.CatalogueModel, error) {
 	dctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	if _, err := jobs.Discover(dctx, deps.DB, instance); err != nil {
-		return store.CatalogueModel{}, false, discoveryFailed{cause: err}
+		return nil, discoveryFailed{cause: err}
 	}
-	catalogue, err := deps.DB.ListCatalogue(ctx)
-	if err != nil {
-		return store.CatalogueModel{}, false, err
-	}
-	row, found := verificationTarget(kind, catalogue, prices)
-	return row, found, nil
+	return deps.DB.ListCatalogue(ctx)
 }
 
 // checkBody is the smallest valid request in each API: one token of output, no
 // tools, no system prompt. Enough to prove credentials, region, and the model,
-// and not enough to cost anything worth reporting.
+// and not enough to cost anything worth reporting. Streaming is the call, not
+// the body: each provider sets or strips the flag its wire format wants.
 func checkBody(api providers.API) []byte {
 	switch api {
 	case providers.APIOpenAIChat:
@@ -468,7 +585,40 @@ func checkBody(api providers.API) []byte {
 	}
 }
 
-// verificationTarget picks what the live check invokes when nobody named one.
+// checkCandidates is what a check with no model named may invoke, in order:
+// the targets of this provider's routes, in route order, and then
+// verificationTargets. A model appears once, under the first route naming it.
+func checkCandidates(
+	kind providers.Kind, instance *providers.Instance, routes []store.Route,
+	catalogue []store.CatalogueModel, prices *pricing.Table,
+) []checkCandidate {
+	var out []checkCandidate
+	seen := map[string]bool{}
+	for _, rt := range routes {
+		if rt.Target.Provider != kind || seen[rt.Target.Model] {
+			continue
+		}
+		// A route on a model that speaks nothing is refused at the gateway
+		// whatever the provider says, so invoking it proves nothing.
+		apis := instance.APIs(rt.Target.Model)
+		if len(apis) == 0 {
+			continue
+		}
+		seen[rt.Target.Model] = true
+		out = append(out, checkCandidate{target: rt.Target.Model, api: apis[0], route: rt.Name})
+	}
+	for _, m := range verificationTargets(kind, catalogue, prices) {
+		if seen[m.ID] {
+			continue
+		}
+		seen[m.ID] = true
+		out = append(out, checkCandidate{target: m.ID, api: m.APIs[0]})
+	}
+	return out
+}
+
+// verificationTargets orders what the live check may invoke when nobody named
+// a model and no route chose one.
 //
 // A model this gateway can serve at all - one with an API - and streaming,
 // because a model that cannot stream cannot serve a coding agent and proving it
@@ -481,7 +631,7 @@ func checkBody(api providers.API) []byte {
 // twice checks the same model twice. Unpriced targets sort last rather than
 // being excluded: "we do not know what this costs" is a weaker reason to skip a
 // model than "it will not work".
-func verificationTarget(kind providers.Kind, catalogue []store.CatalogueModel, prices *pricing.Table) (store.CatalogueModel, bool) {
+func verificationTargets(kind providers.Kind, catalogue []store.CatalogueModel, prices *pricing.Table) []store.CatalogueModel {
 	type candidate struct {
 		row       store.CatalogueModel
 		anthropic bool
@@ -500,9 +650,6 @@ func verificationTarget(kind providers.Kind, catalogue []store.CatalogueModel, p
 		}
 		eligible = append(eligible, c)
 	}
-	if len(eligible) == 0 {
-		return store.CatalogueModel{}, false
-	}
 
 	sort.Slice(eligible, func(i, j int) bool {
 		x, y := eligible[i], eligible[j]
@@ -517,7 +664,11 @@ func verificationTarget(kind providers.Kind, catalogue []store.CatalogueModel, p
 		}
 		return x.row.ID < y.row.ID
 	})
-	return eligible[0].row, true
+	out := make([]store.CatalogueModel, 0, len(eligible))
+	for _, c := range eligible {
+		out = append(out, c.row)
+	}
+	return out
 }
 
 // providerDeps is the console's view of what configuring a provider touches.
@@ -550,6 +701,11 @@ func (a *API) handleProviders(w http.ResponseWriter, r *http.Request) {
 	routes, err := a.db.ListRoutes(r.Context())
 	if err != nil {
 		a.fail(w, r, "reading routes", err)
+		return
+	}
+	refusals, err := a.db.ProviderFailures(r.Context())
+	if err != nil {
+		a.fail(w, r, "reading provider refusals", err)
 		return
 	}
 	snapshot := a.policy.Snapshot()
@@ -619,6 +775,24 @@ func (a *API) handleProviders(w http.ResponseWriter, r *http.Request) {
 				row["state"] = providerNeverChecked
 			default:
 				row["state"] = providerConnected
+			}
+
+			// The latest request the provider refused, in its own words. The
+			// engineer who met it was told only that it happened and to look
+			// here; this screen is administrators' and setup sessions', and
+			// the words name nothing an administrator of this account may not
+			// read. The hint is derived now rather than stored, so it is
+			// today's advice about the words AWS sent then.
+			if f, ok := refusals[d.Kind]; ok {
+				row["last_refusal"] = map[string]any{
+					"at":         f.At.UTC().Format(time.RFC3339),
+					"region":     f.Region,
+					"model":      f.Model,
+					"kind":       f.ErrorKind,
+					"error":      f.Message,
+					"hint":       d.Hint(f.Message),
+					"request_id": f.RequestID,
+				}
 			}
 		}
 		out = append(out, row)
@@ -691,9 +865,9 @@ func (a *API) handlePreflightProvider(w http.ResponseWriter, r *http.Request) {
 }
 
 type providerCheckRequest struct {
-	// Model is the identifier to invoke. Empty picks the cheapest thing
-	// discovery found that this gateway can serve, which is what somebody
-	// clicking "check" means.
+	// Model is the identifier to invoke. Empty picks a route's model, or the
+	// cheapest thing discovery found that this gateway can serve, which is
+	// what somebody clicking "check" means.
 	Model string `json:"model"`
 }
 
@@ -721,14 +895,48 @@ func (a *API) handleCheckProvider(w http.ResponseWriter, r *http.Request) {
 		"target": result.Target,
 		"region": result.Region,
 	}
+	if result.Route != "" {
+		body["route"] = result.Route
+	}
+	refused := make([]map[string]any, 0, len(result.Refused))
+	for _, at := range result.Refused {
+		row := map[string]any{"target": at.Target, "error": at.Error, "hint": at.Hint}
+		if at.Route != "" {
+			row["route"] = at.Route
+		}
+		if at.Access != nil {
+			row["access"] = renderAccess(*at.Access)
+		}
+		refused = append(refused, row)
+	}
+	body["refused"] = refused
 	if result.OK {
 		body["duration_ms"] = result.Duration.Milliseconds()
 		a.log.InfoContext(r.Context(), "provider checked from the console",
 			"provider", kind, "actor", actorFor(PrincipalFrom(r.Context())))
 	} else {
 		body["error"], body["hint"] = result.Error, result.Hint
+		if result.Access != nil {
+			body["access"] = renderAccess(*result.Access)
+		}
 	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+// renderAccess is the one shape a provider's availability report crosses the
+// wire in, for the check and for nothing else.
+func renderAccess(m providers.ModelAccess) map[string]any {
+	out := map[string]any{
+		"model":         m.Model,
+		"agreement":     m.Agreement,
+		"authorization": m.Authorization,
+		"entitlement":   m.Entitlement,
+		"region":        m.Region,
+	}
+	if m.AgreementError != "" {
+		out["agreement_error"] = m.AgreementError
+	}
+	return out
 }
 
 // providerSummaries is the short form of every provider, for screens that name

@@ -440,28 +440,29 @@ func classifyMantle(status int, body []byte) error {
 			message = parsed.Error.Message
 		}
 	}
-	cause := fmt.Errorf("bedrock-mantle: %d %s: %s", status, errType, truncate(message, 512))
+	detail := strings.TrimSpace(fmt.Sprintf("%d %s: %s", status, errType, truncate(message, 512)))
+	cause := errors.New("bedrock-mantle: " + detail)
 
 	switch {
 	case status == http.StatusTooManyRequests || errType == "rate_limit_error":
 		return &providers.Error{Kind: providers.ErrKindThrottled, StatusCode: http.StatusTooManyRequests,
-			Message: "the model is rate limited right now", Err: cause}
+			Message: "the model is rate limited right now", Detail: detail, Err: cause}
 	case status == http.StatusServiceUnavailable || status == 529 || errType == "overloaded_error":
 		return &providers.Error{Kind: providers.ErrKindUnavailable, StatusCode: http.StatusServiceUnavailable,
-			Message: "the model is temporarily unavailable", Err: cause}
+			Message: "the model is temporarily unavailable", Detail: detail, Err: cause}
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return &providers.Error{Kind: providers.ErrKindForbidden, StatusCode: http.StatusBadGateway,
-			Message: "the gateway is not permitted to invoke this model", Err: cause}
+			Message: "the gateway is not permitted to invoke this model", Detail: detail, Err: cause}
 	case status == http.StatusNotFound:
 		return &providers.Error{Kind: providers.ErrKindNotFound, StatusCode: http.StatusBadGateway,
-			Message: "the model is not available to this deployment", Err: cause}
+			Message: "the model is not available to this deployment", Detail: detail, Err: cause}
 	case status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge ||
 		status == http.StatusUnprocessableEntity:
 		return &providers.Error{Kind: providers.ErrKindInvalidRequest, StatusCode: http.StatusBadRequest,
-			Message: "the provider rejected the request", Err: cause}
+			Message: "the provider rejected the request", Detail: detail, Err: cause}
 	default:
 		return &providers.Error{Kind: providers.ErrKindUpstream, StatusCode: http.StatusBadGateway,
-			Message: "the model provider returned an error", Err: cause}
+			Message: "the model provider returned an error", Detail: detail, Err: cause}
 	}
 }
 

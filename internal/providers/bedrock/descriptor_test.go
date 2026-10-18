@@ -59,3 +59,73 @@ func TestHavingNoCredentialsIsNotReadAsSomethingElse(t *testing.T) {
 		t.Errorf("an unrecognised identifier was hinted as %q", got)
 	}
 }
+
+// TestEachRefusalIsToldApart.
+//
+// Bedrock reports five unrelated causes as two exceptions, and an operator
+// sent to the wrong page goes round in a circle: a role granted every Bedrock
+// action is still refused a model AWS does not offer the account, and an
+// account that never submitted Anthropic's form looks, from the error class,
+// like a mistyped identifier. The first two messages are verbatim from the
+// live API (us-east-1, October 2026); the others are AWS's documented forms.
+func TestEachRefusalIsToldApart(t *testing.T) {
+	cases := []struct {
+		name, message, want string
+		modelSpecific       bool
+	}{
+		{
+			name: "Anthropic's use case form",
+			message: "ResourceNotFoundException: Model use case details have not been submitted for this " +
+				"account. Fill out the Anthropic use case details form before using the model. If you have " +
+				"already filled out the form, try again in 15 minutes.",
+			want: "use case details",
+		},
+		{
+			name: "a model AWS does not offer this account",
+			message: "AccessDeniedException: anthropic.claude-haiku-5-5 is not available for this account. " +
+				"You can explore other available models on Amazon Bedrock. For additional access options, " +
+				"contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/",
+			want:          "no IAM change grants it",
+			modelSpecific: true,
+		},
+		{
+			name: "a service control policy",
+			message: "AccessDeniedException: User: arn:aws:sts::111122223333:assumed-role/panorama/task is " +
+				"not authorized to perform: bedrock:InvokeModel on resource: arn:aws:bedrock:us-east-1::" +
+				"foundation-model/x with an explicit deny in a service control policy",
+			want: "service control policy",
+		},
+		{
+			name: "the role",
+			message: "AccessDeniedException: User: arn:aws:sts::111122223333:assumed-role/panorama/task is " +
+				"not authorized to perform: bedrock:InvokeModelWithResponseStream on resource: x",
+			want: "bedrock:InvokeModelWithResponseStream on it",
+		},
+		{
+			name:    "a Marketplace subscription still activating",
+			message: "AccessDeniedException: You don't have access to the model with the specified model ID.",
+			want:    "Manage subscriptions",
+		},
+		{
+			name:          "a retired model",
+			message:       "ResourceNotFoundException: This model version has reached the end of its life.",
+			want:          "retired",
+			modelSpecific: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := runtimeHint(c.message)
+			if !strings.Contains(got, c.want) {
+				t.Errorf("hinted as %q, want it to mention %q", got, c.want)
+			}
+			// Bedrock has no Model access page to enable anything on any more.
+			if strings.Contains(got, "Model access") {
+				t.Errorf("still sends somebody to the Model access page: %q", got)
+			}
+			if specific := runtimeModelSpecific(c.message); specific != c.modelSpecific {
+				t.Errorf("model-specific = %t, want %t", specific, c.modelSpecific)
+			}
+		})
+	}
+}

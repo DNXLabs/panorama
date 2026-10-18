@@ -111,8 +111,27 @@ panorama models list              # the discovered catalogue, with residency and
 
 `providers check` spends one output token, deliberately: an SCP, a missing
 subscription and a wrong identifier all arrive as the same `AccessDenied`, and
-one real request is what tells them apart. See
-[Model providers](/docs/configure/providers/).
+one real request is what tells them apart. It streams, as a coding tool does.
+With no `-model`, it tries each route's model on the provider first, then the
+cheapest model it can serve, and moves past a model Bedrock refuses for a reason
+of that model's own (up to three). Each refused model is printed with Bedrock's
+words, the fix, and what Bedrock reports about the model's availability:
+
+```text
+bedrock could not invoke global.anthropic.claude-haiku-5-5 in us-east-1.
+
+  AccessDeniedException: anthropic.claude-haiku-5-5 is not available for this account. ...
+
+AWS does not offer this model to this AWS account. ...
+
+Bedrock reports for anthropic.claude-haiku-5-5: agreement NOT_AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE, region AVAILABLE.
+
+bedrock invoked us.anthropic.claude-haiku-4-5-20251001-v1:0 in us-east-1 in 812ms, streamed. One token of output.
+```
+
+It exits non-zero when no model could be invoked. See
+[Model providers](/docs/configure/providers/) and
+[The provider check fails](/docs/troubleshooting/#the-provider-check-fails).
 
 ## Prices
 
