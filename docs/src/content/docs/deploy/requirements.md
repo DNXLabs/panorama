@@ -102,7 +102,8 @@ in the way, and neither shows up until a request is made:
   account submits Anthropic's use case details once, in the Amazon Bedrock
   console. Until then every Claude request is refused with *"Model use case
   details have not been submitted for this account"*. It takes up to fifteen
-  minutes to apply after you submit it.
+  minutes to apply after you submit it; see
+  [The Anthropic use case form](/docs/troubleshooting/#the-anthropic-use-case-form).
 - **What AWS and your organization allow.** A newly released model may not be
   offered to every account yet (*"is not available for this account"*), and a
   service control policy may deny `bedrock:InvokeModel`.
