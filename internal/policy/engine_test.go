@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,14 +16,20 @@ import (
 )
 
 // fakeRepo is policy storage without a database.
+//
+// Locked, because the tests of the background loop write to it while Run reads.
 type fakeRepo struct {
-	set   Set
-	spend map[string]map[string]Spend // scope -> subject -> spend
-	err   error
-	loads int
+	mu         sync.Mutex
+	set        Set
+	spend      map[string]map[string]Spend // scope -> subject -> spend
+	err        error
+	loads      int
+	generation int64
 }
 
 func (f *fakeRepo) LoadPolicy(context.Context) (Set, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.loads++
 	if f.err != nil {
 		return Set{}, f.err
@@ -31,10 +38,33 @@ func (f *fakeRepo) LoadPolicy(context.Context) (Set, error) {
 }
 
 func (f *fakeRepo) SpendSince(_ context.Context, scope string, _ time.Time) (map[string]Spend, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.err != nil {
 		return nil, f.err
 	}
 	return f.spend[scope], nil
+}
+
+func (f *fakeRepo) PolicyGeneration(context.Context) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.generation, nil
+}
+
+// write changes the stored policy the way another process would: the set, and
+// the generation every write moves.
+func (f *fakeRepo) write(fn func(*Set)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fn(&f.set)
+	f.generation++
+}
+
+func (f *fakeRepo) loadCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.loads
 }
 
 // newEngine builds a loaded engine with the clock pinned.

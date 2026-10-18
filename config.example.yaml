@@ -296,7 +296,9 @@ policy:
   # This is not how fast a budget reacts to what this instance is serving -
   # every instance counts its own traffic between reloads. It is how fast one
   # instance learns what other instances have served, so a single-replica
-  # deployment is unaffected by the value.
+  # deployment is unaffected by the value. A change to a route, budget, team or
+  # model provider does not wait for it: every instance serves one within a
+  # second.
   # PANORAMA_POLICY_RELOAD_INTERVAL
   reload_interval: 30s
 

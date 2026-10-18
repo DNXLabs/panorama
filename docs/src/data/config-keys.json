@@ -230,7 +230,7 @@
     "env": "PANORAMA_POLICY_RELOAD_INTERVAL",
     "type": "duration",
     "default": "30s",
-    "doc": "ReloadInterval is how often routes, budgets, and spend are re-read.\n\nBetween reloads a replica still counts its own traffic, so this does not\nbound how fast a budget reacts to what this process is serving - only how\nfast it learns what other replicas have served. A single-replica\ndeployment is unaffected by the value.",
+    "doc": "ReloadInterval is how often routes, budgets, and spend are re-read.\n\nBetween reloads a replica still counts its own traffic, so this does not\nbound how fast a budget reacts to what this process is serving - only how\nfast it learns what other replicas have served. A single-replica\ndeployment is unaffected by the value. Nor does it bound how fast a change\nto a route, budget, team or provider arrives: that is served within a\nsecond, whatever this is set to.",
     "section": "policy"
   },
   {

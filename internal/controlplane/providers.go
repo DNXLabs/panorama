@@ -49,7 +49,8 @@ type ProviderDeps struct {
 	Registry *providers.Registry
 	// Policy is reloaded after a change, which is what rebuilds the provider in
 	// the snapshot the gateway serves from. Nil in a one-shot CLI command,
-	// where the running gateway picks the change up on its next reload.
+	// where the running gateway sees the policy generation move and reloads
+	// within a second.
 	Policy *policy.Engine
 	// Prices is refreshed for a provider whose region changed. Nil, or one with
 	// no refresh interval, leaves pricing to its own schedule.

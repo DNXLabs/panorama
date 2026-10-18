@@ -76,7 +76,8 @@ On **Routing**, press **New route**.
   caption="Browse models. The same model appears once per geography, because where it is processed and what it costs both differ."
 />
 
-It takes effect on the next request. Engineers pick it up on **My setup**.
+It takes effect within a second, on every replica. Engineers pick it up on
+**My setup**.
 
 ## Choose a model your tools can use
 
@@ -206,6 +207,11 @@ file and the console unless the file is the source of truth.
 
 Both commands check every model against the catalogue, exactly as the console
 does. See the [Policy file reference](/docs/reference/policy/).
+
+`apply` prints what it did, for example `1 added, 0 updated, 0 removed, 2
+unchanged`. An entry identical to what is stored is not written, so applying
+the same file on every deploy reports everything unchanged. A running gateway,
+every replica of it, serves the change within a second of `apply` finishing.
 
 ## What goes wrong
 

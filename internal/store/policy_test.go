@@ -38,12 +38,12 @@ func TestApplyPolicyIsIdempotent(t *testing.T) {
 			},
 		}
 
-		added, updated, removed, err := db.ApplyPolicy(t.Context(), set)
+		changes, err := db.ApplyPolicy(t.Context(), set)
 		if err != nil {
 			t.Fatalf("first apply: %v", err)
 		}
-		if added != 3 || updated != 0 || removed != 0 {
-			t.Errorf("first apply: %d added, %d updated, %d removed; want 3/0/0", added, updated, removed)
+		if want := (PolicyChanges{Added: 3}); changes != want {
+			t.Errorf("first apply: %+v, want %+v", changes, want)
 		}
 
 		loaded, err := db.LoadPolicy(t.Context())
@@ -57,18 +57,27 @@ func TestApplyPolicyIsIdempotent(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list routes: %v", err)
 		}
-		created := map[string]time.Time{}
+		before := map[string]Route{}
 		for _, r := range stored {
-			created[r.Name] = r.CreatedAt
+			before[r.Name] = r
+		}
+		generation, err := db.PolicyGeneration(t.Context())
+		if err != nil {
+			t.Fatalf("generation: %v", err)
 		}
 
-		// The same document again changes nothing and creates nothing new.
-		added, updated, removed, err = db.ApplyPolicy(t.Context(), set)
+		// The same document again changes nothing, creates nothing new, and
+		// says so: "3 updated" for a file nobody edited sends whoever runs it
+		// looking for the edit.
+		changes, err = db.ApplyPolicy(t.Context(), set)
 		if err != nil {
 			t.Fatalf("second apply: %v", err)
 		}
-		if added != 0 || removed != 0 || updated != 3 {
-			t.Errorf("second apply: %d added, %d updated, %d removed; want 0/3/0", added, updated, removed)
+		if want := (PolicyChanges{Unchanged: 3}); changes != want {
+			t.Errorf("second apply: %+v, want %+v", changes, want)
+		}
+		if changes.Changed() {
+			t.Error("an unchanged document reports a change")
 		}
 
 		after, err := db.ListRoutes(t.Context())
@@ -78,13 +87,35 @@ func TestApplyPolicyIsIdempotent(t *testing.T) {
 		for _, r := range after {
 			// A name is a route's identity across edits, and it is what every
 			// request already recorded against it resolves through. Re-applying
-			// must update rather than replace.
-			if was, ok := created[r.Name]; !ok || !r.CreatedAt.Equal(was) {
-				t.Errorf("route %q was recreated on re-apply: created %v, now %v", r.Name, was, r.CreatedAt)
+			// must not replace it, and an unchanged route is not written at all.
+			was, ok := before[r.Name]
+			if !ok || !r.CreatedAt.Equal(was.CreatedAt) {
+				t.Errorf("route %q was recreated on re-apply: created %v, now %v", r.Name, was.CreatedAt, r.CreatedAt)
+			}
+			if !r.UpdatedAt.Equal(was.UpdatedAt) {
+				t.Errorf("route %q was rewritten on re-apply: updated %v, now %v", r.Name, was.UpdatedAt, r.UpdatedAt)
 			}
 		}
 		if len(after) != 2 {
 			t.Errorf("%d routes after re-applying the same document, want 2", len(after))
+		}
+		// Nothing was written, so no running gateway is told to reload.
+		if again, gerr := db.PolicyGeneration(t.Context()); gerr != nil || again != generation {
+			t.Errorf("generation after an unchanged apply = %d (%v), want %d", again, gerr, generation)
+		}
+
+		// One field edited is one entry updated, and the rest stay unchanged.
+		edited := set
+		edited.Routes = []policy.Route{cheap, docRoute("fast", "us.anthropic.claude-haiku-4-5")}
+		edited.Routes[1].Description = "for subagents"
+		edited.Budgets = []policy.Budget{set.Budgets[0]}
+		edited.Budgets[0].HardLimit = nanos(2_000_000_000_000)
+		changes, err = db.ApplyPolicy(t.Context(), edited)
+		if err != nil {
+			t.Fatalf("edited apply: %v", err)
+		}
+		if want := (PolicyChanges{Updated: 2, Unchanged: 1}); changes != want {
+			t.Errorf("edited apply: %+v, want %+v", changes, want)
 		}
 	})
 }
@@ -100,17 +131,17 @@ func TestApplyPolicyRemovesWhatIsNotInTheFile(t *testing.T) {
 				{Scope: policy.ScopeOrg, Period: policy.PeriodDay, Enabled: true, HardLimit: nanos(1)},
 			},
 		}
-		if _, _, _, err := db.ApplyPolicy(t.Context(), full); err != nil {
+		if _, err := db.ApplyPolicy(t.Context(), full); err != nil {
 			t.Fatalf("apply: %v", err)
 		}
 
 		trimmed := policy.Set{Routes: full.Routes[:1]}
-		_, _, removed, err := db.ApplyPolicy(t.Context(), trimmed)
+		changes, err := db.ApplyPolicy(t.Context(), trimmed)
 		if err != nil {
 			t.Fatalf("apply trimmed: %v", err)
 		}
-		if removed != 2 {
-			t.Errorf("removed %d, want 2 (the dropped route and the budget)", removed)
+		if want := (PolicyChanges{Removed: 2, Unchanged: 1}); changes != want {
+			t.Errorf("apply trimmed: %+v, want %+v (the dropped route and the budget removed)", changes, want)
 		}
 
 		loaded, err := db.LoadPolicy(t.Context())
@@ -144,7 +175,7 @@ func TestLoadPolicyRoundTripsEveryField(t *testing.T) {
 				SoftLimit: nanos(5_000_000_000), HardLimit: nanos(10_000_000_000),
 			}},
 		}
-		if _, _, _, err := db.ApplyPolicy(t.Context(), set); err != nil {
+		if _, err := db.ApplyPolicy(t.Context(), set); err != nil {
 			t.Fatalf("apply: %v", err)
 		}
 
@@ -238,7 +269,7 @@ func TestLoadPolicyKeepsNullLimitsNull(t *testing.T) {
 			Scope: policy.ScopeOrg, Period: policy.PeriodDay, Enabled: true,
 			SoftLimit: nanos(1_000_000_000),
 		}}}
-		if _, _, _, err := db.ApplyPolicy(t.Context(), set); err != nil {
+		if _, err := db.ApplyPolicy(t.Context(), set); err != nil {
 			t.Fatalf("apply: %v", err)
 		}
 

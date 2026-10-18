@@ -1754,6 +1754,16 @@ this gateway promises not to do. The consequence is stated rather than hidden: a
 is priced only after it finishes, so enforcement is always against spend as of the last
 completed request.
 
+**A policy change is served within a second, everywhere, without a query on the request
+path.** Triggers on exactly the tables `LoadPolicy` reads (`model_routes`, `budgets`,
+`team_members`, `providers`, `cost_centers`) move one row of `policy_generation`, and
+`Engine.Run` reads it every `policy.GenerationPollInterval` and reloads when it has moved.
+Without it a route applied from a one-off task, or saved on another replica, was refused
+as a name nobody created until the next reload. Triggers rather than the writers, because
+the write path that forgot would be the one whose change appears to do nothing; a table
+added to the snapshot needs its trigger in a new migration in both dialects. The reload
+interval still reconciles spend, which is the query with a cost.
+
 **A blocked request must never count against the budget that blocked it.** The predicate
 is `attempts > 0` — did a provider actually get invoked — and it is applied identically
 in the ledger and in the reconcile query. Two derivations of the same rule drift.

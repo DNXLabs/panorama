@@ -59,6 +59,11 @@ docker compose -f deploy/compose/docker-compose.yml \
 Configuration comes from the file and from `PANORAMA_`-prefixed environment
 variables; the environment wins. `-config <path>` names the file.
 
+A command's flags may come before or after its argument:
+`providers check bedrock -model X` and `providers check -model X bedrock` are
+the same command. A command that takes no argument refuses one rather than
+ignoring it, and `--` ends the flags.
+
 ## Running the gateway
 
 ```sh
@@ -103,6 +108,7 @@ writes nothing. See [Single sign-on](/docs/configure/sso/).
 panorama providers list           # each provider, its region and its state
 panorama providers set bedrock -region us-east-1
 panorama providers check bedrock  # prove a provider can invoke a model, with one token
+panorama providers check bedrock -model us.anthropic.claude-haiku-4-5-20251001-v1:0
 panorama providers policy         # the IAM policy this deployment's role needs
 
 panorama models discover          # ask each provider what this account can invoke
@@ -137,7 +143,11 @@ panorama policy apply -f policy.yaml
 `check` and `apply` run the same validation the console does, so a model that
 is not in the catalogue is refused when you run the command, not when somebody
 makes a request. **`apply` removes any route or budget that is not in the
-file.** See [Routes as a file](/docs/configure/routes/#routes-as-a-file) and the
+file.** It reports what it added, updated, removed and left unchanged, and
+writes nothing for an entry that is already as the file says, so re-applying
+an unchanged file changes nothing. A running gateway serves a change within a
+second, on every replica. See
+[Routes as a file](/docs/configure/routes/#routes-as-a-file) and the
 [Policy file reference](/docs/reference/policy/).
 
 ## People and teams
