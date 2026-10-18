@@ -43,6 +43,7 @@ Metadata:
           - AssignPublicIp
           - LoadBalancerScheme
           - IngressCidr
+          - IngressPrefixListId
       - Label: { default: Naming and TLS }
         Parameters:
           - DomainName
@@ -60,6 +61,7 @@ Metadata:
           - TaskCpuArchitecture
           - AutoMigrate
           - LogRetentionDays
+          - CreateLogGroups
       - Label: { default: Database }
         Parameters:
           - DatabaseMinCapacity
@@ -119,10 +121,21 @@ Parameters:
   IngressCidr:
     Type: String
     Default: 0.0.0.0/0
-    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
+    AllowedPattern: ^$|^(\d{1,3}\.){3}\d{1,3}/\d{1,2}(,(\d{1,3}\.){3}\d{1,3}/\d{1,2}){0,3}$
+    ConstraintDescription: Up to four CIDRs, comma-separated, no spaces.
     Description: >-
-      Who may reach the load balancer. Narrow it to your office and VPN ranges
-      if you can - every credential this product issues is bearer-shaped.
+      Who may reach the load balancer: up to four CIDRs, comma-separated.
+      Narrow it to your office and VPN ranges if you can - every credential
+      this product issues is bearer-shaped. For more, use
+      IngressPrefixListId; empty admits only that list.
+
+  IngressPrefixListId:
+    Type: String
+    Default: ""
+    AllowedPattern: ^$|^pl-[0-9a-f]+$
+    Description: >-
+      Optional. A managed prefix list that may also reach the load balancer.
+      Each entry counts twice against the security group's rule quota.
 
   DomainName:
     Type: String
@@ -188,7 +201,8 @@ Parameters:
     Description: >-
       How many tasks to run. Set this to 0 for the first deploy, run the
       migration task, then set it back - see the README. Two is the smallest
-      count that survives an availability zone.
+      count that survives an availability zone; one, with AutoMigrate true,
+      is an evaluation deployment.
 
   TaskCpu:
     Type: String
@@ -229,7 +243,20 @@ Parameters:
     Type: Number
     Default: 30
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+    Description: Retention for the service's, the database's and Container Insights' logs.
 
+  # RDS and Container Insights each create their log group on first write,
+  # with no retention and outside any stack. Declared here, they are the
+  # stack's. A stack from an older template already has both, and
+  # CloudFormation will not create one that exists, so it says false.
+  CreateLogGroups:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Create the database's and Container Insights' log groups in the stack,
+      with LogRetentionDays. False only for a stack created before v0.1.10;
+      see Upgrading in the manual.
   DatabaseMinCapacity:
     Type: Number
     Default: 0.5
@@ -348,11 +375,25 @@ Conditions:
   GenerateEncryptionKey: !Equals [!Ref EncryptionKeySecretArn, ""]
   WithWebSearchGateway: !Equals [!Ref CreateWebSearchGateway, "true"]
   RestoreDatabase: !Not [!Equals [!Ref DatabaseSnapshotIdentifier, ""]]
+  WithLogGroups: !Equals [!Ref CreateLogGroups, "true"]
+  # Padded before it is split, so a missing slot is "" and not an error.
+  HasIngressCidr1: !Not [!Equals [!Select [0, !Split [",", !Sub "${IngressCidr},,,"]], ""]]
+  HasIngressCidr2: !Not [!Equals [!Select [1, !Split [",", !Sub "${IngressCidr},,,"]], ""]]
+  HasIngressCidr3: !Not [!Equals [!Select [2, !Split [",", !Sub "${IngressCidr},,,"]], ""]]
+  HasIngressCidr4: !Not [!Equals [!Select [3, !Split [",", !Sub "${IngressCidr},,,"]], ""]]
+  HasIngressPrefixList: !Not [!Equals [!Ref IngressPrefixListId, ""]]
 
-# Refused before anything is created. Elsewhere AgentCore answers "Connector
-# integration web-search is not available for this account", which names the
-# account, after the gateway and its role already exist.
 Rules:
+  IngressSource:
+    Assertions:
+      - Assert: !Or
+          - !Not [!Equals [!Ref IngressCidr, ""]]
+          - !Not [!Equals [!Ref IngressPrefixListId, ""]]
+        AssertDescription: Set IngressCidr or IngressPrefixListId, or nothing can reach the load balancer.
+
+  # Refused before anything is created. Elsewhere AgentCore answers "Connector
+  # integration web-search is not available for this account", which names the
+  # account, after the gateway and its role already exist.
   WebSearchRegion:
     RuleCondition: !Equals [!Ref CreateWebSearchGateway, "true"]
     Assertions:
@@ -374,16 +415,16 @@ Resources:
       GroupDescription: !Sub "${AWS::StackName} load balancer"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - Description: HTTPS from the permitted range
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: !Ref IngressCidr
-        - Description: HTTP, redirected to HTTPS
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: !Ref IngressCidr
+        - !If [HasIngressCidr1, {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: !Select [0, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressCidr1, {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Select [0, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressCidr2, {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: !Select [1, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressCidr2, {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Select [1, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressCidr3, {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: !Select [2, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressCidr3, {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Select [2, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressCidr4, {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: !Select [3, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressCidr4, {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Select [3, !Split [",", !Sub "${IngressCidr},,,"]]}, !Ref AWS::NoValue]
+        - !If [HasIngressPrefixList, {IpProtocol: tcp, FromPort: 443, ToPort: 443, SourcePrefixListId: !Ref IngressPrefixListId}, !Ref AWS::NoValue]
+        - !If [HasIngressPrefixList, {IpProtocol: tcp, FromPort: 80, ToPort: 80, SourcePrefixListId: !Ref IngressPrefixListId}, !Ref AWS::NoValue]
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-alb"
@@ -560,6 +601,16 @@ Resources:
       EnableCloudwatchLogsExports:
         - postgresql
 
+  # Only an instance exports logs, so cluster, log group, instance is enough.
+  DatabaseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: WithLogGroups
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/rds/cluster/${DatabaseCluster}/postgresql"
+      RetentionInDays: !Ref LogRetentionDays
+
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -567,6 +618,13 @@ Resources:
       Engine: aurora-postgresql
       DBInstanceClass: db.serverless
       PubliclyAccessible: false
+      # How it waits for its log group: DependsOn cannot name a conditional
+      # resource, and a Ref inside an If can.
+      Tags:
+        - !If
+          - WithLogGroups
+          - { Key: panorama:log-group, Value: !Ref DatabaseLogGroup }
+          - !Ref AWS::NoValue
 
   # ---------------------------------------------------------------- roles
   #
@@ -865,6 +923,15 @@ Resources:
 
   # ------------------------------------------------------------------ service
 
+  ContainerInsightsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: WithLogGroups
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/ecs/containerinsights/${AWS::StackName}/performance"
+      RetentionInDays: !Ref LogRetentionDays
+
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -872,6 +939,12 @@ Resources:
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
+      # Waits for its log group, as DatabaseInstance does.
+      Tags:
+        - !If
+          - WithLogGroups
+          - { Key: panorama:log-group, Value: !Ref ContainerInsightsLogGroup }
+          - !Ref AWS::NoValue
 
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -1035,6 +1108,12 @@ Outputs:
   OidcRedirectUri:
     Description: Register this with your identity provider as an allowed callback URL.
     Value: !Sub "https://${DomainName}/auth/oidc/callback"
+
+  RunTaskNetwork:
+    Description: The --network-configuration for a one-off task, as the service runs.
+    Value: !Sub
+      - "awsvpcConfiguration={subnets=[${Subnets}],securityGroups=[${ServiceSecurityGroup}],assignPublicIp=${AssignPublicIp}}"
+      - Subnets: !Join [",", !Ref ServiceSubnetIds]
 
   MigrateCommand:
     Description: >-
