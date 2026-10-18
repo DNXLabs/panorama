@@ -347,3 +347,32 @@ a row that is still growing. Every total is over the requests inside the filter
 and the window, so a row and the requests it opens onto are always the same
 set. The CSV export stays one line per request, because an auditor reconciles
 requests, and a sum cannot be reconciled.
+
+## Deploying on AWS
+
+### The stack owns every log group it causes
+
+RDS and Container Insights each create a log group the first time they write,
+with no retention and outside any stack, so after the stack is deleted they
+stay and keep costing money. The template creates both before anything writes
+to them, with the same retention as the service's own log, and they go with
+the stack. A stack from an older template already has them, and CloudFormation
+refuses to create a log group that exists, so that stack opts out once with
+`CreateLogGroups=false`.
+
+### The template stays small enough to deploy inline
+
+`aws cloudformation deploy` sends a template in the request unless it is given
+an S3 bucket, and refuses one over 51,200 bytes. Every deploy in this manual is
+that command, so a template past the limit would break all of them while the
+Launch Stack button kept working. The build checks the size, and the template's
+comments are kept short for it.
+
+### A release checks its addresses as a stranger would
+
+The README points at three things: the latest release's template on GitHub,
+the template in a public bucket, and the image's `stable` tag. Until a release
+was marked stable none of the three existed, and every build step was green.
+Each release now fetches all three without credentials after it is published.
+A release fails if they do not serve it, and a prerelease warns while they
+serve nothing.

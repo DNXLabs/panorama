@@ -1314,7 +1314,25 @@ else). An empty `ImageTag`, the default, runs the mapping's version: a
 parameter's default would be stored with the stack and survive the next
 template, and a mapping is not. Every `aws cloudformation deploy` on an
 existing stack names `DesiredCount` explicitly, because a parameter left out
-keeps its current value.
+keeps its current value. **Every `aws` command in the manual and the READMEs
+names `--region "$REGION"`**, because the CLI otherwise takes `AWS_REGION`
+or the profile's, CloudShell sets the console's, and a command sent to the
+wrong region reads as a stack that does not exist. A one-off task reads its
+network from the `RunTaskNetwork` output rather than spelling out subnets and
+an `assignPublicIp` that is right for only one network shape.
+
+**The rendered template stays under 51,200 bytes**, and CI checks it.
+`aws cloudformation deploy --template-file` sends the body inline unless
+given a bucket, and every documented deploy is that form; past the limit they
+all fail while the Launch Stack button, which reads from S3, keeps working.
+Comments in it earn their bytes.
+
+**A release proves its own addresses.** `release.yml`'s last job fetches,
+anonymously, what the README points at: the image by version and channel,
+the template in the public bucket under both, and
+`releases/latest/download/panorama.yaml`. All three were once missing while
+every build step was green, because no release had ever been marked stable; a
+prerelease warns about that state and a release fails on it.
 
 **Sections are grouped by who is reading**: deciding, deploying, administering,
 using a coding tool, then reference and how it works. The *Administer* pages

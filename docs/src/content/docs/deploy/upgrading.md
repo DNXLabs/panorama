@@ -25,15 +25,17 @@ whatever the release needs from the stack (a new permission, a new setting)
 with it:
 
 ```sh
+REGION=us-east-1   # the region the stack is in
+
 # 1. The new release's template, deployed with no tasks running
 curl -fsSLO https://github.com/dnxlabs/panorama/releases/download/v1.4.0/panorama.yaml
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=0
 
 # 2. Run the MigrateCommand stack output, and wait for exit code 0
 
 # 3. Roll the service
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=2
 ```
 
@@ -53,6 +55,34 @@ against the new schema.
 
 Aurora takes its own automated backups. Take a manual snapshot before an
 upgrade that crosses a major version.
+
+### Log groups on a stack from before v0.1.10
+
+From v0.1.10 the stack creates the database's and Container Insights' log
+groups itself, with your `LogRetentionDays`, so that they are deleted with it.
+A stack created from an older template already has both, created by RDS and
+Container Insights with no retention, and CloudFormation refuses to create a
+log group that exists: the update fails before it changes anything.
+
+Pass `CreateLogGroups=false` the first time you deploy the new template, and
+set the retention on the two existing groups yourself:
+
+```sh
+aws cloudformation deploy --region "$REGION" --stack-name panorama \
+  --template-file panorama.yaml --capabilities CAPABILITY_IAM \
+  --parameter-overrides DesiredCount=0 CreateLogGroups=false
+
+CLUSTER=$(aws cloudformation describe-stack-resource --region "$REGION" --stack-name panorama \
+  --logical-resource-id DatabaseCluster --query StackResourceDetail.PhysicalResourceId --output text)
+
+aws logs put-retention-policy --region "$REGION" --retention-in-days 30 \
+  --log-group-name "/aws/rds/cluster/$CLUSTER/postgresql"
+aws logs put-retention-policy --region "$REGION" --retention-in-days 30 \
+  --log-group-name /aws/ecs/containerinsights/panorama/performance
+```
+
+The parameter keeps its value on later updates. Those two groups stay behind
+when the stack is deleted, so delete them by hand then.
 
 A request streaming on a task that is being replaced gets up to 300 seconds to
 finish. See

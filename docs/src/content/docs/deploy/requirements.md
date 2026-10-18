@@ -91,11 +91,22 @@ matter for a streaming gateway:
 `/healthz` and `/readyz` are the only unauthenticated routes, and they expose
 no organization data.
 
-## You do not need to request model access
+## Model access
 
-Bedrock enables every foundation model by default and subscribes the account on
-first use. What *can* block you is a service control policy denying
-`bedrock:InvokeModel`, and no AWS API reports that ahead of time. That is why
-setup includes a real one-token request: it is the only check that tells a
-working role from one that looks right. See
+There is no model access to request. Bedrock enables every foundation model by
+default and subscribes the account through AWS Marketplace on the first
+request, which can take a few minutes to activate. Two things can still stand
+in the way, and neither shows up until a request is made:
+
+- **Anthropic's use case form.** Before any Anthropic model answers, each AWS
+  account submits Anthropic's use case details once, in the Amazon Bedrock
+  console. Until then every Claude request is refused with *"Model use case
+  details have not been submitted for this account"*. It takes up to fifteen
+  minutes to apply after you submit it.
+- **What AWS and your organization allow.** A newly released model may not be
+  offered to every account yet (*"is not available for this account"*), and a
+  service control policy may deny `bedrock:InvokeModel`.
+
+That is why setup includes a real one-token request: it is the only check that
+tells a working account from one that looks right. See
 [Troubleshooting](/docs/troubleshooting/#the-provider-check-fails).

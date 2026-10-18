@@ -41,6 +41,10 @@ cd panorama
 cp deploy/compose/.env.example deploy/compose/.env
 ```
 
+`deploy/compose/.env.example` lists every setting the stack reads, each with a
+comment saying when to change it. Its name starts with a dot, so a plain `ls`
+or a file browser hides it; `ls -a deploy/compose` shows it.
+
 :::note
 Compose reads `.env` **from the directory holding the compose file**, not from
 where you run the command. A `.env` in the repository root is silently ignored.

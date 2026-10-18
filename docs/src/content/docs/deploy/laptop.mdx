@@ -38,6 +38,9 @@ cd panorama
 cp deploy/compose/.env.example deploy/compose/.env
 ```
 
+`.env.example` is the template, with a comment on every setting. Its name starts
+with a dot, so `ls` hides it; `ls -a deploy/compose` shows it.
+
 Add three things to `deploy/compose/.env`: a region, your AWS credentials, and
 a sign-in for this machine.
 

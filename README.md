@@ -163,12 +163,15 @@ From the AWS console, in the region you are deploying to:
 
 It opens CloudFormation with the latest release's template and `DesiredCount`
 set to `0`; fill in your network, hostname and certificate. Or from the CLI,
-with the template attached to the latest release:
+with the template attached to the latest release. Every command names its
+region, so a stray `AWS_REGION` cannot send it somewhere else:
 
 ```sh
+REGION=us-east-1   # the region you deploy to
+
 curl -fsSLO https://github.com/dnxlabs/panorama/releases/latest/download/panorama.yaml
 
-aws cloudformation deploy \
+aws cloudformation deploy --region "$REGION" \
   --stack-name panorama \
   --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM \
@@ -193,7 +196,7 @@ Run the command in the stack's `MigrateCommand` output and wait for that task
 to exit zero. Then start the service, one task per availability zone:
 
 ```sh
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=2
 ```
 
@@ -242,7 +245,8 @@ cd panorama
 cp deploy/compose/.env.example deploy/compose/.env
 ```
 
-Compose reads `.env` **from the directory holding the compose file**, not from where
+`.env.example` is a hidden file (`ls -a deploy/compose`) holding every setting,
+each with a comment. Compose reads `.env` **from the directory holding the compose file**, not from where
 you run the command. Set at least:
 
 ```sh
@@ -409,9 +413,11 @@ task's log stream. See
 [Running a command](https://panorama.dnx.ai/docs/deploy/aws/#running-a-command).
 
 ```sh
-aws ecs run-task --cluster panorama --task-definition panorama \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[<service-subnets>],securityGroups=[<ServiceSecurityGroupId>],assignPublicIp=<AssignPublicIp>}" \
+NETWORK=$(aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
+  --query "Stacks[0].Outputs[?OutputKey=='RunTaskNetwork'].OutputValue" --output text)
+
+aws ecs run-task --region "$REGION" --cluster panorama --task-definition panorama \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
   --overrides '{"containerOverrides":[{"name":"panorama","command":["sso","doctor"]}]}'
 ```
 
