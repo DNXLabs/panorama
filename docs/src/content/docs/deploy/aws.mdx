@@ -490,11 +490,6 @@ retention and all deleted with the stack: the service's own,
 `/aws/ecs/<stack>`, the database's, `/aws/rds/cluster/<cluster>/postgresql`,
 and Container Insights', `/aws/ecs/containerinsights/<stack>/performance`.
 
-A stack created from a template older than v0.1.10 already has the last two,
-created by RDS and Container Insights themselves, and CloudFormation will not
-create a log group that exists. [Upgrading](/docs/deploy/upgrading/#log-groups-on-a-stack-from-before-v0110)
-says what to do.
-
 ## More
 
 [Upgrading](/docs/deploy/upgrading/) covers new releases. The template's own

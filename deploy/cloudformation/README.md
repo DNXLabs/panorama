@@ -585,10 +585,7 @@ service's, `/aws/ecs/<stack>`; the database's,
 `/aws/rds/cluster/<cluster>/postgresql`; and Container Insights',
 `/aws/ecs/containerinsights/<stack>/performance`. RDS and Container Insights
 would each create theirs on first write, with no retention and outside the
-stack, so the template creates them first (`CreateLogGroups`). A stack from a
-template older than v0.1.10 already has those two and passes
-`CreateLogGroups=false` once, setting their retention by hand; the manual's
-*Upgrading* has the commands.
+stack, so the template creates them first.
 
 The service's own log is `/aws/ecs/panorama`, as JSON. Structured context — `userId`,
 `teamId`, `sessionId`, `model`, `provider`, `tool` — is on every metric and log

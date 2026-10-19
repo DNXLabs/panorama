@@ -404,9 +404,7 @@ RDS and Container Insights each create a log group the first time they write,
 with no retention and outside any stack, so after the stack is deleted they
 stay and keep costing money. The template creates both before anything writes
 to them, with the same retention as the service's own log, and they go with
-the stack. A stack from an older template already has them, and CloudFormation
-refuses to create a log group that exists, so that stack opts out once with
-`CreateLogGroups=false`.
+the stack.
 
 ### The template stays small enough to deploy inline
 
