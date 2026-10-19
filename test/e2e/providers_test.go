@@ -452,6 +452,7 @@ func TestTheProvidersAreConfiguredAndChecked(t *testing.T) {
 	var check struct {
 		OK     bool   `json:"ok"`
 		Target string `json:"target"`
+		Route  string `json:"route"`
 		Error  string `json:"error"`
 	}
 	resp := d.api(http.MethodPost, "/api/v1/providers/bedrock-mantle/check", map[string]string{})
@@ -460,8 +461,13 @@ func TestTheProvidersAreConfiguredAndChecked(t *testing.T) {
 	if !check.OK {
 		t.Fatalf("the Mantle check failed: %s", check.Error)
 	}
-	if !strings.HasPrefix(check.Target, "anthropic.") {
-		t.Errorf("checked %q, want a Claude model first", check.Target)
+	// Mantle has routes here, so the check proves a model engineers are served
+	// rather than the catalogue's cheapest. Which route comes first is the
+	// route list's order, and not this test's business.
+	switch check.Route {
+	case routeMantleSonnet, routeOSS, routeGPT, routeQwen:
+	default:
+		t.Errorf("checked %q through route %q, want a model one of Mantle's routes serves", check.Target, check.Route)
 	}
 
 	d.getJSON("/api/v1/providers", &providers)
