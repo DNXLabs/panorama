@@ -411,8 +411,10 @@ the stack.
 `aws cloudformation deploy` sends a template in the request unless it is given
 an S3 bucket, and refuses one over 51,200 bytes. Every deploy in this manual is
 that command, so a template past the limit would break all of them while the
-Launch Stack button kept working. The build checks the size, and the template's
-comments are kept short for it.
+Launch Stack button kept working. A release ships the template without its
+comments, which are a third of it, and the build checks the size. The copy in
+the repository keeps them, because that is the one people read, and a test
+parses both to prove the release's tag is the only thing that differs.
 
 ### A release checks its addresses as a stranger would
 

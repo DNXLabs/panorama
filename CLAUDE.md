@@ -1370,7 +1370,12 @@ an `assignPublicIp` that is right for only one network shape.
 `aws cloudformation deploy --template-file` sends the body inline unless
 given a bucket, and every documented deploy is that form; past the limit they
 all fail while the Launch Stack button, which reads from S3, keeps working.
-Comments in it earn their bytes.
+`release-template.sh` drops comments and blank lines outside block scalars,
+which are a third of the file, so the repository's copy keeps its reasoning
+and the shipped one about 16 KB of headroom.
+`TestTheReleaseTemplateMeansTheSame` parses both and allows exactly one
+difference, the release's tag; a renderer that dropped a line of content would
+still produce valid YAML that deploys something else.
 
 **A release proves its own addresses.** `release.yml`'s last job fetches,
 anonymously, what the README points at: the image by version and channel,
