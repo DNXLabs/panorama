@@ -675,8 +675,6 @@ jobs:
       PRERELEASE: ${{ needs.publish.outputs.prerelease }}
       DIGEST: ${{ needs.publish.outputs.digest }}
     steps:
-      - uses: docker/setup-buildx-action@v4
-
       - name: The release's own template
         run: |
           set -euo pipefail
@@ -694,9 +692,37 @@ jobs:
           failed=0
           fail() { echo "::error::$*"; failed=1; }
 
-          # name ADDRESS - the digest a public image reference resolves to.
+          # digest_of IMAGE:TAG - the digest a public image reference resolves
+          # to, empty when the tag does not exist. Asked of the registry API
+          # with an anonymous token, as a pull would, so a refusal arrives as
+          # a status code in the log: buildx's imagetools reported a tag that
+          # served the right digest to everybody else as missing, and said
+          # nothing about why. Anonymous requests to ECR Public are rate
+          # limited per address, so a 429, a 5xx or no answer at all (000) is
+          # asked again, the token request included.
           digest_of() {
-            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null
+            local repo=${1%:*} tag=${1##*:} asked reply status
+            repo=${repo#public.ecr.aws/}
+            for attempt in 1 2 3 4 5; do
+              asked="the token for $1"
+              reply=$(curl -sS -w '\n%{http_code}' "https://public.ecr.aws/token/?scope=repository:$repo:pull")
+              status=${reply##*$'\n'}
+              if [ "$status" = 200 ]; then
+                asked=$1
+                reply=$(curl -sS -I -o - -w '%{http_code}' \
+                  -H "Authorization: Bearer $(printf '%s' "${reply%$'\n'*}" | jq -r .token)" \
+                  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+                  "https://public.ecr.aws/v2/$repo/manifests/$tag")
+                status=${reply##*$'\n'}
+              fi
+              case "$status" in
+                200) printf '%s\n' "$reply" | tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" { print $2 }'; return ;;
+                404) return ;;
+                000|429|5??) echo "::warning::$asked answered $status, attempt $attempt" >&2; sleep $((attempt * 5)) ;;
+                *) echo "::error::$asked answered $status" >&2; return ;;
+              esac
+            done
+            echo "::error::$asked answered $status five times" >&2
           }
           # fetch URL FILE - the body, or a failure naming the status.
           fetch() {
