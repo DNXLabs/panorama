@@ -77,7 +77,7 @@ services:
   # are interval workers in this same process and run on SQLite too. See
   # internal/jobs.
   panorama:
-    image: golang:1.27.2-trixie
+    image: golang:1.27.3-trixie
     init: true
     restart: unless-stopped
     user: *dev-user

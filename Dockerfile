@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 DNX Technology Pty Ltd and contributors
 # SPDX-License-Identifier: AGPL-3.0-only
 
-ARG GO_VERSION=1.27.2
+ARG GO_VERSION=1.27.3
 ARG NODE_VERSION=24
 # Declared up here because an ARG used in a FROM must be in the global scope;
 # the reasoning for the value is at the runtime stage below.

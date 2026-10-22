@@ -11,7 +11,7 @@
 # Caches live in ./.gocache so containers run as your user and nothing lands in
 # the repository owned by root.
 
-GO_VERSION   ?= 1.27.2
+GO_VERSION   ?= 1.27.3
 GO_IMAGE     ?= golang:$(GO_VERSION)-trixie
 LINT_VERSION ?= v2.14.0
 LINT_IMAGE   ?= golangci/golangci-lint:$(LINT_VERSION)
