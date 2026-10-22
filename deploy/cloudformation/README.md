@@ -58,7 +58,20 @@ terminates at the load balancer.
 
 3. **Bedrock access in the region you name.** No model access request is
    needed — Bedrock subscribes the account on first invocation, which is what
-   the `aws-marketplace:Subscribe` statement in the task role is for.
+   the `aws-marketplace:Subscribe` statement in the task role is for. An
+   account that has never used Claude does have to submit Anthropic's use case
+   form once, in the Bedrock console; until it does, every Claude request is
+   refused with "Model use case details have not been submitted".
+
+4. **Who may reach it.** `IngressCidr` takes up to four CIDRs, comma-separated
+   with no spaces, and defaults to `0.0.0.0/0`. For more, name a managed prefix
+   list in `IngressPrefixListId`; with `IngressCidr` empty, only the list is
+   admitted. The stack refuses both empty.
+
+**What it costs.** About US$137 a month in `ap-southeast-2` and US$100 in
+`us-east-1` with the defaults, before Bedrock, and the database's 0.5-ACU floor
+is half of it. The manual's *What it costs* has the breakdown and a one-task
+evaluation setup.
 
 The image is public, at `public.ecr.aws/dnxsolutions/panorama`, so there is nothing
 to request before deploying. See [The image](#the-image).
@@ -108,10 +121,16 @@ release's version - so it runs the image it was released with, and the next
 release's template moves the image with it. This copy belongs to no release
 and runs `stable`.
 
+Every command here names its region with `--region "$REGION"`. Without it the
+AWS CLI uses `AWS_REGION` or the profile's region, which in CloudShell is the
+console's, and a command against the wrong region reads as a missing stack.
+
 ```sh
+REGION=us-east-1   # the region the stack is in
+
 curl -fsSLO https://github.com/dnxlabs/panorama/releases/latest/download/panorama.yaml
 
-aws cloudformation deploy \
+aws cloudformation deploy --region "$REGION" \
   --stack-name panorama \
   --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM \
@@ -139,14 +158,14 @@ The stack outputs the exact command, already filled in with your cluster,
 subnets and security group:
 
 ```sh
-aws cloudformation describe-stacks --stack-name panorama \
+aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
   --query "Stacks[0].Outputs[?OutputKey=='MigrateCommand'].OutputValue" --output text
 ```
 
 Run what it prints, then wait for the task to stop and confirm it exited zero:
 
 ```sh
-aws ecs describe-tasks --cluster panorama --tasks <task-arn> \
+aws ecs describe-tasks --region "$REGION" --cluster panorama --tasks <task-arn> \
   --query "tasks[0].containers[0].exitCode"
 ```
 
@@ -155,7 +174,7 @@ A non-zero exit is in CloudWatch Logs under `/aws/ecs/panorama`.
 ### 3. Start the service
 
 ```sh
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=2
 ```
 
@@ -182,9 +201,11 @@ one deterministically rather than reading it out of the logs — with more than
 one task, two can mint at the same moment and only the second survives:
 
 ```sh
-aws ecs run-task --cluster panorama --task-definition panorama \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-aaa,subnet-bbb],securityGroups=[<ServiceSecurityGroupId>],assignPublicIp=DISABLED}" \
+NETWORK=$(aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
+  --query "Stacks[0].Outputs[?OutputKey=='RunTaskNetwork'].OutputValue" --output text)
+
+aws ecs run-task --region "$REGION" --cluster panorama --task-definition panorama \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
   --overrides '{"containerOverrides":[{"name":"panorama","command":["admin","setup"]}]}'
 ```
 
@@ -197,10 +218,13 @@ output and enter it. That session configures single sign-on, the group-to-role
 mapping and Bedrock — and nothing else. It creates no account: the first
 account is created by the first sign-in, and it is an administrator.
 
-**Evaluating without single sign-on?** Mint a gateway token instead with
-`panorama token create`, run the same way as the task above. It authenticates a
-coding tool and the console's API, not a browser: the Routing screen, My setup
-and Analytics need a single sign-on account.
+**Evaluating without single sign-on?** Mint an administrator's gateway token
+instead, run the same way as the task above with the command
+`["token","create","-email","you@example.com","-role","admin"]`, and paste it on
+the console's sign-in screen under **Gateway token**. Until single sign-on is
+configured that opens the whole console as that account; once it is, the field
+is gone and everybody signs in through the provider. The token is in the task's
+log stream, so delete the stream once you have copied it.
 
 ---
 
@@ -366,13 +390,13 @@ The new release's template, in this order, every time:
 curl -fsSLO https://github.com/dnxlabs/panorama/releases/download/<version>/panorama.yaml
 
 # 1. register the new revision with no tasks, and migrate on it
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=0
 
 # 2. run the MigrateCommand output, wait for exit code 0
 
 # 3. roll the service
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=2
 ```
 
@@ -430,9 +454,11 @@ a one-off task built from the current task definition, so it runs the same
 image the service runs, with the same database and the same secrets:
 
 ```sh
-aws ecs run-task --cluster <stack-name> --task-definition <stack-name> \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[<service-subnets>],securityGroups=[<ServiceSecurityGroupId>],assignPublicIp=<AssignPublicIp>}" \
+NETWORK=$(aws cloudformation describe-stacks --region "$REGION" --stack-name <stack-name> \
+  --query "Stacks[0].Outputs[?OutputKey=='RunTaskNetwork'].OutputValue" --output text)
+
+aws ecs run-task --region "$REGION" --cluster <stack-name> --task-definition <stack-name> \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
   --overrides '{"containerOverrides":[{"name":"panorama","command":["admin","setup"]}]}'
 ```
 
@@ -444,7 +470,7 @@ stream under `/aws/ecs/<stack-name>`.
 **To get a shell in a running task:**
 
 ```sh
-aws ecs execute-command --cluster <stack-name> --task <task-id> \
+aws ecs execute-command --region "$REGION" --cluster <stack-name> --task <task-id> \
   --container panorama --interactive --command /busybox/sh
 ```
 
@@ -474,10 +500,10 @@ CloudFormation and a hand edit is reverted by the next stack update without
 saying so.
 
 ```sh
-SECRET=$(aws cloudformation describe-stacks --stack-name <stack> \
+SECRET=$(aws cloudformation describe-stacks --region "$REGION" --stack-name <stack> \
   --query "Stacks[0].Outputs[?OutputKey=='OidcSecretArn'].OutputValue" --output text)
 
-aws secretsmanager put-secret-value --secret-id "$SECRET" --secret-string '{
+aws secretsmanager put-secret-value --region "$REGION" --secret-id "$SECRET" --secret-string '{
   "issuer":        "https://login.microsoftonline.com/<tenant>/v2.0",
   "client_id":     "...",
   "client_secret": "...",
@@ -485,7 +511,7 @@ aws secretsmanager put-secret-value --secret-id "$SECRET" --secret-string '{
   "groups_claim":  ""
 }'
 
-aws ecs update-service --cluster <stack> --service panorama --force-new-deployment
+aws ecs update-service --region "$REGION" --cluster <stack> --service panorama --force-new-deployment
 ```
 
 The setup wizard prints this with your own values already filled in, once it
@@ -518,11 +544,11 @@ anyone would look for.
 Rotation is therefore two deliberate steps:
 
 ```sh
-aws secretsmanager update-secret --secret-id <DatabaseSecretArn> \
+aws secretsmanager update-secret --region "$REGION" --secret-id <DatabaseSecretArn> \
   --secret-string '{"username":"panorama","password":"<new>"}'
-aws rds modify-db-cluster --db-cluster-identifier <cluster> \
+aws rds modify-db-cluster --region "$REGION" --db-cluster-identifier <cluster> \
   --master-user-password '<new>' --apply-immediately
-aws ecs update-service --cluster panorama --service panorama --force-new-deployment
+aws ecs update-service --region "$REGION" --cluster panorama --service panorama --force-new-deployment
 ```
 
 Turning managed rotation on later is a configuration change rather than a code
@@ -554,7 +580,14 @@ the manual's *Move to another region*.
 
 ### Logs
 
-Everything is in `/aws/ecs/panorama`, as JSON. Structured context — `userId`,
+Three log groups, each with `LogRetentionDays` and deleted with the stack: the
+service's, `/aws/ecs/<stack>`; the database's,
+`/aws/rds/cluster/<cluster>/postgresql`; and Container Insights',
+`/aws/ecs/containerinsights/<stack>/performance`. RDS and Container Insights
+would each create theirs on first write, with no retention and outside the
+stack, so the template creates them first.
+
+The service's own log is `/aws/ecs/panorama`, as JSON. Structured context — `userId`,
 `teamId`, `sessionId`, `model`, `provider`, `tool` — is on every metric and log
 line where it is known, so CloudWatch Logs Insights is usable directly:
 

@@ -233,6 +233,11 @@ func (s *Server) handleAuthState(w http.ResponseWriter, r *http.Request) {
 		// nothing outside this machine can reach, and on every other one this
 		// is false because the handler is not there to be found.
 		"dev_sign_in": s.cfg.Dev.Enabled(),
+		// Whether POST /api/v1/auth/token exists, which is whenever single
+		// sign-on does not. Its own field rather than the gate inferring it
+		// from sso_configured, so the rule lives where the route is
+		// registered and nowhere else.
+		"token_sign_in": !s.cfg.OIDC.Configured(),
 	}
 
 	users, err := s.db.CountUsers(r.Context())

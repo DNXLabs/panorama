@@ -96,6 +96,13 @@ reloaded on an interval and incremented as requests complete. A database query
 between a keystroke and the first token is what this gateway promises not to
 do.
 
+Waiting for the interval to see a change is not the price of that. Database
+triggers move a counter on every write to the tables the snapshot is read
+from, and each replica polls that one row every second, beside the request
+path rather than on it. Triggers rather than the code that writes, because
+there are a dozen write paths and the one that forgot would be the change that
+appears to have done nothing.
+
 The cost is stated: a request is priced when it finishes, so a limit is checked
 against spend as of the last completed request, and can be overshot a little.
 
@@ -188,6 +195,29 @@ by the first sign-in. Bootstrapping uses a one-time setup code that opens a
 session and not an account, because a bootstrap administrator would be the one
 row contradicting everything else.
 
+### Without single sign-on, a gateway token signs in to the console
+
+A deployment being evaluated often has no identity provider yet, and the setup
+code reaches only sign-in and the model providers. Routes, analytics and My
+setup need an account. The account comes from `panorama token create`, run
+where the deployment runs, and the token it prints is pasted on the sign-in
+screen, which exchanges it for an ordinary console session.
+
+That grants nothing new. A gateway token already reaches every part of the
+console's API as its owner, so a session opened with it is that person's, with
+their role. The alternatives each added something: a local administrator with a
+password is a second credential guarding a door the command that would reset it
+already guards, and letting the development sign-in run on a server would put
+an administrator session behind no credential at all.
+
+It stops as soon as single sign-on is configured: the sign-in route is not
+there at all, so an organization that put its console behind its identity
+provider, and that provider's multi-factor checks, has no second way in beside
+it that a token in somebody's dotfile would open. It accepts a personal gateway
+token only, never a service token, a command-line grant or a setup code, and
+only as a JSON request, so a form on another site cannot sign somebody's browser
+in to an account it chose.
+
 ## Providers
 
 ### The IAM role grants every region
@@ -210,6 +240,24 @@ actually blocks invocation, a service control policy. A missing permission, a
 missing marketplace subscription and a wrong model id all come back as the same
 `AccessDenied`. One real request for one token is the only check that tells
 them apart.
+
+The request is streamed, as a coding tool's is, and is made against a route's
+model first, so a check cannot pass on a model nobody is served while the
+route's model is refused. What tells the causes apart is the sentence Bedrock
+wrote rather than the error's class: an unsubmitted Anthropic use case form and
+a retired model are both "not found", and a model AWS does not offer the
+account is "access denied" while every availability status Bedrock publishes
+for it reads available. So those statuses are shown beside a refusal as
+evidence and never decide anything, and the check tries another model only
+after a refusal that belongs to one model.
+
+### A refusal is explained to the administrator, not the engineer
+
+When Bedrock refuses a model, the engineer is told that it did and where an
+administrator can see why. Bedrock's reason names the AWS account and its
+roles, so it is kept for **Settings → Model providers** rather than sent to a
+coding tool. Only refusals are kept, and their text is Bedrock's: nothing
+derived from a request body is stored.
 
 ### The API surfaces are relayed, never translated
 
@@ -347,3 +395,32 @@ a row that is still growing. Every total is over the requests inside the filter
 and the window, so a row and the requests it opens onto are always the same
 set. The CSV export stays one line per request, because an auditor reconciles
 requests, and a sum cannot be reconciled.
+
+## Deploying on AWS
+
+### The stack owns every log group it causes
+
+RDS and Container Insights each create a log group the first time they write,
+with no retention and outside any stack, so after the stack is deleted they
+stay and keep costing money. The template creates both before anything writes
+to them, with the same retention as the service's own log, and they go with
+the stack.
+
+### The template stays small enough to deploy inline
+
+`aws cloudformation deploy` sends a template in the request unless it is given
+an S3 bucket, and refuses one over 51,200 bytes. Every deploy in this manual is
+that command, so a template past the limit would break all of them while the
+Launch Stack button kept working. A release ships the template without its
+comments, which are a third of it, and the build checks the size. The copy in
+the repository keeps them, because that is the one people read, and a test
+parses both to prove the release's tag is the only thing that differs.
+
+### A release checks its addresses as a stranger would
+
+The README points at three things: the latest release's template on GitHub,
+the template in a public bucket, and the image's `stable` tag. Until a release
+was marked stable none of the three existed, and every build step was green.
+Each release now fetches all three without credentials after it is published.
+A release fails if they do not serve it, and a prerelease warns while they
+serve nothing.

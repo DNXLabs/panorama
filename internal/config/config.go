@@ -195,7 +195,9 @@ type Policy struct {
 	// Between reloads a replica still counts its own traffic, so this does not
 	// bound how fast a budget reacts to what this process is serving - only how
 	// fast it learns what other replicas have served. A single-replica
-	// deployment is unaffected by the value.
+	// deployment is unaffected by the value. Nor does it bound how fast a change
+	// to a route, budget, team or provider arrives: that is served within a
+	// second, whatever this is set to.
 	ReloadInterval time.Duration `yaml:"reload_interval"`
 }
 

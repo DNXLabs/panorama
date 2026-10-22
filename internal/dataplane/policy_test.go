@@ -71,6 +71,8 @@ func (s *stubPolicyRepo) SpendSince(_ context.Context, scope string, _ time.Time
 	return s.spend[scope], nil
 }
 
+func (s *stubPolicyRepo) PolicyGeneration(context.Context) (int64, error) { return 0, nil }
+
 // A route is an alias: the client names it and never names the model behind it.
 func TestARouteResolvesToItsModel(t *testing.T) {
 	provider := &fakeProvider{}

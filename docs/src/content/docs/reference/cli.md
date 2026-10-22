@@ -59,6 +59,11 @@ docker compose -f deploy/compose/docker-compose.yml \
 Configuration comes from the file and from `PANORAMA_`-prefixed environment
 variables; the environment wins. `-config <path>` names the file.
 
+A command's flags may come before or after its argument:
+`providers check bedrock -model X` and `providers check -model X bedrock` are
+the same command. A command that takes no argument refuses one rather than
+ignoring it, and `--` ends the flags.
+
 ## Running the gateway
 
 ```sh
@@ -103,6 +108,7 @@ writes nothing. See [Single sign-on](/docs/configure/sso/).
 panorama providers list           # each provider, its region and its state
 panorama providers set bedrock -region us-east-1
 panorama providers check bedrock  # prove a provider can invoke a model, with one token
+panorama providers check bedrock -model us.anthropic.claude-haiku-4-5-20251001-v1:0
 panorama providers policy         # the IAM policy this deployment's role needs
 
 panorama models discover          # ask each provider what this account can invoke
@@ -111,8 +117,27 @@ panorama models list              # the discovered catalogue, with residency and
 
 `providers check` spends one output token, deliberately: an SCP, a missing
 subscription and a wrong identifier all arrive as the same `AccessDenied`, and
-one real request is what tells them apart. See
-[Model providers](/docs/configure/providers/).
+one real request is what tells them apart. It streams, as a coding tool does.
+With no `-model`, it tries each route's model on the provider first, then the
+cheapest model it can serve, and moves past a model Bedrock refuses for a reason
+of that model's own (up to three). Each refused model is printed with Bedrock's
+words, the fix, and what Bedrock reports about the model's availability:
+
+```text
+bedrock could not invoke global.anthropic.claude-haiku-5-5 in us-east-1.
+
+  AccessDeniedException: anthropic.claude-haiku-5-5 is not available for this account. ...
+
+AWS does not offer this model to this AWS account. ...
+
+Bedrock reports for anthropic.claude-haiku-5-5: agreement NOT_AVAILABLE, authorization AUTHORIZED, entitlement AVAILABLE, region AVAILABLE.
+
+bedrock invoked us.anthropic.claude-haiku-4-5-20251001-v1:0 in us-east-1 in 812ms, streamed. One token of output.
+```
+
+It exits non-zero when no model could be invoked. See
+[Model providers](/docs/configure/providers/) and
+[The provider check fails](/docs/troubleshooting/#the-provider-check-fails).
 
 ## Prices
 
@@ -137,7 +162,11 @@ panorama policy apply -f policy.yaml
 `check` and `apply` run the same validation the console does, so a model that
 is not in the catalogue is refused when you run the command, not when somebody
 makes a request. **`apply` removes any route or budget that is not in the
-file.** See [Routes as a file](/docs/configure/routes/#routes-as-a-file) and the
+file.** It reports what it added, updated, removed and left unchanged, and
+writes nothing for an entry that is already as the file says, so re-applying
+an unchanged file changes nothing. A running gateway serves a change within a
+second, on every replica. See
+[Routes as a file](/docs/configure/routes/#routes-as-a-file) and the
 [Policy file reference](/docs/reference/policy/).
 
 ## People and teams
@@ -158,8 +187,9 @@ panorama token create -email you@example.com -role admin    # -name labels the t
 
 It mints a gateway token for somebody and creates their account if it does not
 exist. This is how a deployment with no single sign-on gets its first
-credential. `-role` is `admin`, `manager` or `developer`, and only applies to a
-new account.
+credential, and until single sign-on is configured the console's sign-in
+screen accepts the token. `-role` is `admin`, `manager` or `developer`, and only
+applies to a new account.
 
 On an engineer's own machine:
 

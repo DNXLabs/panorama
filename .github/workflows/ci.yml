@@ -59,6 +59,20 @@ jobs:
       - name: The release template renders
         run: deploy/cloudformation/release-template.sh v0.0.0-ci > /dev/null
 
+      # `aws cloudformation deploy --template-file` sends the template inline
+      # unless it is given an S3 bucket, and CloudFormation refuses an inline
+      # template over 51,200 bytes. Every command in the manual is that form,
+      # so a template past the limit breaks every documented deploy while the
+      # Launch Stack button, which reads from S3, keeps working.
+      - name: The template fits an inline deploy
+        run: |
+          size=$(deploy/cloudformation/release-template.sh v0.0.0-ci | wc -c)
+          echo "the rendered template is $size bytes"
+          if [ "$size" -gt 51200 ]; then
+            echo "::error::the rendered template is $size bytes; aws cloudformation deploy refuses more than 51,200 without --s3-bucket"
+            exit 1
+          fi
+
       # Known vulnerabilities in the modules this binary actually calls into,
       # not merely depends on, so a finding is one worth acting on.
       - name: govulncheck

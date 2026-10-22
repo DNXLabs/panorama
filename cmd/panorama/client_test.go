@@ -5,11 +5,8 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
-	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -221,61 +218,48 @@ func TestConfigureAcceptsFlagsAfterTheToolName(t *testing.T) {
 	cases := []struct {
 		name string
 		args []string
-		rest []string
+		want configureOptions
 	}{
 		{
 			name: "flags after the tool, as the console publishes it",
 			args: []string{"claude-code", "-url", "https://panorama.example", "-write"},
-			rest: []string{"-url", "https://panorama.example", "-write"},
+			want: configureOptions{tool: "claude-code", url: "https://panorama.example", write: true},
 		},
 		{
 			name: "flags before the tool",
 			args: []string{"-url", "https://panorama.example", "-write", "claude-code"},
-			rest: []string{"-url", "https://panorama.example", "-write"},
+			want: configureOptions{tool: "claude-code", url: "https://panorama.example", write: true},
 		},
 		{
 			name: "a value that looks like a tool name is not one",
 			args: []string{"-path", "opencode.json", "opencode"},
-			rest: []string{"-path", "opencode.json"},
+			want: configureOptions{tool: "opencode", path: "opencode.json"},
 		},
 		{
 			name: "an = form carries its own value",
 			args: []string{"-url=https://panorama.example", "opencode", "-write"},
-			rest: []string{"-url=https://panorama.example", "-write"},
+			want: configureOptions{tool: "opencode", url: "https://panorama.example", write: true},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tool, rest := splitToolName(tc.args)
-			if tool == "" {
-				t.Fatalf("no tool name found in %v", tc.args)
+			// Whichever order they were written in, the flags have to have been
+			// read. A -write that parsed as a positional is the bug.
+			got, err := parseConfigure(tc.args)
+			if err != nil {
+				t.Fatalf("parseConfigure(%v): %v", tc.args, err)
 			}
-			if !slices.Equal(rest, tc.rest) {
-				t.Errorf("rest = %v, want %v", rest, tc.rest)
-			}
-
-			fs := flag.NewFlagSet("configure", flag.ContinueOnError)
-			fs.SetOutput(io.Discard)
-			url := fs.String("url", "", "")
-			write := fs.Bool("write", false, "")
-			path := fs.String("path", "", "")
-			if err := fs.Parse(rest); err != nil {
-				t.Fatalf("parsing %v: %v", rest, err)
-			}
-
-			// Whichever order they were written in, the flags have to have
-			// been read. A -write that parsed as a positional is the bug.
-			if strings.Contains(strings.Join(tc.args, " "), "-write") && !*write {
-				t.Error("-write was not parsed; the command would print and write nothing")
-			}
-			if strings.Contains(strings.Join(tc.args, " "), "-url") && *url == "" {
-				t.Error("-url was not parsed; the command would use the default deployment")
-			}
-			if strings.Contains(strings.Join(tc.args, " "), "-path") && *path == "" {
-				t.Error("-path was not parsed; the command would write to the default location")
+			if got != tc.want {
+				t.Errorf("parseConfigure(%v) = %+v, want %+v", tc.args, got, tc.want)
 			}
 		})
+	}
+
+	for _, args := range [][]string{nil, {"-write"}, {"opencode", "claude-code"}} {
+		if _, err := parseConfigure(args); err == nil {
+			t.Errorf("parseConfigure(%v) named one tool; want a refusal", args)
+		}
 	}
 }
 

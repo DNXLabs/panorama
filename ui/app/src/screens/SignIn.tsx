@@ -15,14 +15,17 @@ import { ActionButton, ErrorBanner, SubmitButton, useAction } from '../ui'
 // situation it answers - a group mapping that admits nobody, a provider
 // reconfigured out from under the deployment - arises long after first run.
 //
-// There is no third door. A deployment evaluating without single sign-on is
-// reached with a gateway token, which authenticates the console API as well as
-// a coding tool.
+// A third door exists only while single sign-on does not: a gateway token,
+// minted with `panorama token create` where the deployment runs, exchanged for
+// an ordinary console session. It is how a deployment evaluated without an
+// identity provider is used at all, and the server stops registering it the
+// moment an issuer is configured, so the gate offers it only when told to.
 
 export function SignIn() {
   const { auth, reload } = useSession()
   const [failure, setFailure] = useState('')
   const [enteringCode, setEnteringCode] = useState(false)
+  const [enteringToken, setEnteringToken] = useState(false)
 
   // A failed SSO round trip comes back in the fragment, so the reason never
   // reaches a server log or a referrer header.
@@ -63,13 +66,27 @@ export function SignIn() {
             <ErrorBanner error={new Error(failure)} />
           </div>
         )}
-        {noWayIn || enteringCode ? (
-          <EnterSetupCode onDone={reload} onCancel={noWayIn ? undefined : () => setEnteringCode(false)} />
+        {enteringToken && auth.token_sign_in ? (
+          <div className="stack">
+            <div>
+              <div className="card-title">Sign in with a gateway token</div>
+              <div className="card-sub">Single sign-on is not configured on this deployment yet.</div>
+            </div>
+            <TokenSignIn onDone={reload} onCancel={() => setEnteringToken(false)} />
+          </div>
+        ) : noWayIn || enteringCode ? (
+          <EnterSetupCode
+            onDone={reload}
+            onCancel={noWayIn ? undefined : () => setEnteringCode(false)}
+            onToken={auth.token_sign_in ? () => setEnteringToken(true) : undefined}
+          />
         ) : (
           <Existing
             ssoConfigured={auth.sso_configured}
+            tokenSignIn={Boolean(auth.token_sign_in)}
             nobodyYet={auth.setup_required}
             onSetUp={() => setEnteringCode(true)}
+            onSignedIn={reload}
           />
         )}
         {auth.dev_sign_in && <DevSignIn onDone={reload} />}
@@ -98,9 +115,11 @@ function Brand() {
 function EnterSetupCode({
   onDone,
   onCancel,
+  onToken,
 }: {
   onDone: () => Promise<void>
   onCancel?: () => void
+  onToken?: () => void
 }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState<unknown>(null)
@@ -168,6 +187,16 @@ function EnterSetupCode({
         and the model providers - the things a deployment cannot work without - and then you sign
         in through your identity provider. If you have lost the code,{' '}
         <span className="mono">panorama admin setup</span> issues a fresh one.
+        {onToken && (
+          <>
+            {' '}
+            No identity provider to connect yet?{' '}
+            <button type="button" className="btn link" onClick={onToken}>
+              Sign in with a gateway token
+            </button>
+            .
+          </>
+        )}
         {onCancel && (
           <>
             {' '}
@@ -227,15 +256,95 @@ function DevSignIn({ onDone }: { onDone: () => Promise<void> }) {
   )
 }
 
+/**
+ * TokenSignIn exchanges a gateway token for a console session.
+ *
+ * Shown only where the server said the route exists, which is a deployment
+ * with no identity provider. The token is the owner's own credential and
+ * already reaches every console endpoint from a script, so the session it opens
+ * is that person's and nothing more; the field says where one comes from,
+ * because somebody looking at this has by construction not been given one by a
+ * screen.
+ */
+function TokenSignIn({ onDone, onCancel }: { onDone: () => Promise<void>; onCancel?: () => void }) {
+  const [token, setToken] = useState('')
+  const [error, setError] = useState<unknown>(null)
+
+  // As with the setup code, onDone replaces the gate with the console, so the
+  // pending state is the only one anybody sees.
+  const submit = async () => {
+    setError(null)
+    try {
+      const result = await post<{ csrf_token?: string }>('/api/v1/auth/token', {
+        token: token.trim(),
+      })
+      setCsrfToken(result.csrf_token ?? '')
+      await onDone()
+    } catch (cause) {
+      setError(cause)
+      throw cause
+    }
+  }
+
+  const { state, act } = useAction(submit)
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        act()
+      }}
+      className="stack"
+    >
+      <ErrorBanner error={error} />
+
+      <div className="field">
+        <label htmlFor="gateway-token">Gateway token</label>
+        <input
+          id="gateway-token"
+          className="input mono"
+          type="password"
+          value={token}
+          placeholder="pnt_…"
+          autoComplete="off"
+          onChange={(e) => setToken(e.target.value)}
+        />
+      </div>
+
+      <SubmitButton state={state} label="Sign in" disabled={!token.trim()} primary />
+
+      <div className="prose tight">
+        Mint one where Panorama runs, with{' '}
+        <span className="mono">panorama token create -email you@example.com -role admin</span> - on
+        AWS, as a one-off task on the stack’s cluster. The session is that account’s, and
+        this way in closes once single sign-on is configured.
+        {onCancel && (
+          <>
+            {' '}
+            <button type="button" className="btn link" onClick={onCancel}>
+              Back
+            </button>
+            .
+          </>
+        )}
+      </div>
+    </form>
+  )
+}
+
 /** Existing is the ordinary sign-in. */
 function Existing({
   ssoConfigured,
+  tokenSignIn,
   nobodyYet,
   onSetUp,
+  onSignedIn,
 }: {
   ssoConfigured: boolean
+  tokenSignIn: boolean
   nobodyYet: boolean
   onSetUp: () => void
+  onSignedIn: () => Promise<void>
 }) {
   // Only a path the console can actually render is worth coming back to. The
   // gate appears at whatever URL the visitor arrived at - it has to, since every
@@ -266,14 +375,9 @@ function Existing({
         >
           Continue with single sign-on
         </a>
-      ) : (
-        <div className="prose">
-          Until an identity provider is configured, the console is reachable with a gateway token:
-          send it as <span className="mono">Authorization: Bearer pnt_…</span> against{' '}
-          <span className="mono">/api/v1</span>. Mint one with{' '}
-          <span className="mono">panorama token create</span>.
-        </div>
-      )}
+      ) : tokenSignIn ? (
+        <TokenSignIn onDone={onSignedIn} />
+      ) : null}
 
       <div className="prose tight" style={{ marginTop: 4 }}>
         {ssoConfigured

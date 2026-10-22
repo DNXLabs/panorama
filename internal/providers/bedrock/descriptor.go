@@ -54,6 +54,7 @@ func Descriptors() []providers.Descriptor {
 			ValidateOptions: validateRuntimeOptions,
 			Build:           buildRuntime,
 			Hint:            runtimeHint,
+			ModelSpecific:   runtimeModelSpecific,
 			Policy:          policy,
 			Endpoint:        func(region string) string { return "bedrock-runtime." + region + ".amazonaws.com" },
 		},
@@ -142,30 +143,68 @@ func buildMantle(ctx context.Context, s providers.Settings, log *slog.Logger) (*
 
 // runtimeHint turns the failures everybody hits into the fix.
 //
-// Matched on the provider's own text rather than on a classified error, because
-// what an operator needs here is the sentence that names the console page they
-// have to open, and that depends on which failure it was.
+// Matched on the provider's own text rather than on a classified error,
+// because Bedrock reports causes with nothing in common under one exception:
+// an account that has not submitted Anthropic's use case form and a model that
+// has been retired are both ResourceNotFoundException, and a missing IAM
+// action, an SCP, a Marketplace subscription and a model AWS does not offer
+// this account are all AccessDeniedException. Each needs somebody to open a
+// different page, so each is told apart by the sentence AWS wrote, quoted here
+// as observed against the live API.
 func runtimeHint(message string) string {
 	lower := strings.ToLower(message)
 	if hint, ok := credentialHint(lower); ok {
 		return hint
 	}
 	switch {
-	case strings.Contains(lower, "accessdenied"), strings.Contains(lower, "not authorized"):
-		// Two different causes, one error string. The marketplace half is named
-		// because it is the one nobody guesses: Bedrock subscribes the account on
-		// first invocation, so a role with every bedrock: action still fails the
-		// first request against a model this account has never used.
-		return "The credentials Panorama is running with cannot invoke this model. They need bedrock:InvokeModel and bedrock:InvokeModelWithResponseStream on it, and aws-marketplace:Subscribe with aws-marketplace:ViewSubscriptions on * - Bedrock subscribes the account to a model on the first invocation, and without those the first call fails exactly like this. The policy below is the whole of what the role needs."
-	case strings.Contains(lower, "don't have access"), strings.Contains(lower, "not enabled"), strings.Contains(lower, "modelnotready"):
-		return "This model is not enabled in this account. Enable it under Model access in the Bedrock console, then try again."
-	case strings.Contains(lower, "validation"), strings.Contains(lower, "invalid"), strings.Contains(lower, "not found"):
+	case strings.Contains(lower, "use case details have not been submitted"):
+		// "Model use case details have not been submitted for this account.
+		// Fill out the Anthropic use case details form before using the
+		// model." Once per AWS account, for every Anthropic model at once.
+		return "Anthropic asks every AWS account to describe its use case once before any of its models can be invoked, and this account has not. In the Amazon Bedrock console, open any Anthropic model in the Model catalog and submit the use case details it asks for. It applies to every Anthropic model, and can take up to 15 minutes to take effect; check again after that. Nothing in Panorama's role or configuration changes."
+	case strings.Contains(lower, "is not available for this account"):
+		// "anthropic.claude-haiku-5-5 is not available for this account. You
+		// can explore other available models on Amazon Bedrock."
+		return "AWS does not offer this model to this AWS account. This is decided by AWS per account and is not a permission: no IAM change grants it. Choose another model - Refresh the catalogue and pick one - or ask your AWS account team for access to this one."
+	case strings.Contains(lower, "end of its life"), strings.Contains(lower, "end-of-life"),
+		strings.Contains(lower, "legacy"), strings.Contains(lower, "no longer available"):
+		return "Bedrock has retired this model, or this version of it. Point the route at a current model from the catalogue."
+	case strings.Contains(lower, "explicit deny"), strings.Contains(lower, "service control policy"),
+		strings.Contains(lower, "permissions boundary"):
+		// The role is fine and something above it says no. Granting the role
+		// more cannot fix it, so saying "add bedrock:InvokeModel" here would
+		// send somebody round in a circle.
+		return "A policy outside Panorama's role denies this: a service control policy on the account or its organizational unit, or a permissions boundary on the role. Granting the role more cannot override an explicit deny; whoever administers the AWS organization has to allow Bedrock for this account, region and model."
+	case strings.Contains(lower, "aws-marketplace"), strings.Contains(lower, "marketplace"),
+		strings.Contains(lower, "don't have access"), strings.Contains(lower, "do not have access"):
+		// Bedrock subscribes the account to a model through AWS Marketplace on
+		// its first invocation. That needs the two marketplace actions, and it
+		// is not instant: until the subscription is active the same request
+		// is refused.
+		return "Bedrock subscribes this AWS account to a model through AWS Marketplace on its first invocation, and the subscription is not active yet. If Panorama's role has aws-marketplace:Subscribe and aws-marketplace:ViewSubscriptions (the policy below has both), this usually clears within a few minutes: check again shortly. If it has not cleared after 15 minutes, look in AWS Marketplace, Manage subscriptions, for a failed or pending agreement for the model, and check that no service control policy denies aws-marketplace:Subscribe."
+	case strings.Contains(lower, "not authorized to perform"), strings.Contains(lower, "accessdenied"),
+		strings.Contains(lower, "access denied"), strings.Contains(lower, "not authorized"):
+		return "The credentials Panorama is running with are not permitted to invoke this model. They need bedrock:InvokeModel and bedrock:InvokeModelWithResponseStream on it, and aws-marketplace:Subscribe with aws-marketplace:ViewSubscriptions on * - Bedrock subscribes the account to a model on the first invocation, and without those the first call fails like this. The policy below is the whole of what the role needs."
+	case strings.Contains(lower, "modelnotready"):
+		return "Bedrock is still preparing this model in this account. Check again in a few minutes."
+	case strings.Contains(lower, "validation"), strings.Contains(lower, "invalid"), strings.Contains(lower, "not found"),
+		strings.Contains(lower, "notfound"):
 		return "Bedrock did not recognise this identifier. Current Anthropic models require an inference profile - the us. or global. prefixed form. Refresh the catalogue and choose one from it."
 	case strings.Contains(lower, "could not resolve"), strings.Contains(lower, "no such host"), strings.Contains(lower, "timeout"):
 		return "Panorama could not reach Bedrock. Check the region and that this deployment has egress to bedrock-runtime in it."
 	default:
 		return "Check the region, the model, and that the deployment's credentials can invoke it."
 	}
+}
+
+// runtimeModelSpecific reports the refusals that are about one model and not
+// about the deployment: a model AWS does not offer this account, and a retired
+// one. Everything else - credentials, IAM, an SCP, Anthropic's form, which
+// covers every Anthropic model at once - fails the next model the same way.
+func runtimeModelSpecific(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "is not available for this account") ||
+		strings.Contains(lower, "end of its life") || strings.Contains(lower, "end-of-life")
 }
 
 // credentialHint names the two failures that are about having credentials at

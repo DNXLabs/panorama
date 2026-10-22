@@ -13,6 +13,13 @@
 #
 # The repository's copy keeps `stable`, because it belongs to no release.
 #
+# Comments and blank lines are left out, except the SPDX lines and anything
+# inside a block scalar, where they are content. They are a third of the file,
+# and `aws cloudformation deploy --template-file` refuses a template over
+# 51,200 bytes; the repository's copy is the one people read.
+# TestTheReleaseTemplateMeansTheSame (template_test.go) holds the rendering to
+# exactly one changed value.
+#
 # Exactly one line changes, and it must be found where it is expected: the
 # first `Tag: stable` inside the Release mapping. Anything else - the mapping
 # renamed, its value changed, the block reshaped - fails here rather than
@@ -36,9 +43,20 @@ if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 fi
 
 awk -v tag="$tag" '
-  /^  Release:$/                   { block = 1; print; next }
+  # Inside a block scalar every line is content, blank and "#" alike. It
+  # ends at the first non-blank line indented no deeper than its key.
+  scalar {
+    if ($0 ~ /^[ \t]*$/) { print; next }
+    match($0, /^ */)
+    if (RLENGTH > indent) { print; next }
+    scalar = 0
+  }
+  /^# SPDX-/                        { print; next }
+  /^[ \t]*(#.*)?$/                  { next }
+  /^  Release:$/                    { block = 1; print; next }
   block && /^      Tag: stable$/    { print "      Tag: " tag; replaced++; block = 0; next }
   block && /^  [^ ]/                { block = 0 }
+  /(:|^ *-) +[|>][-+0-9]*$/         { match($0, /^ */); indent = RLENGTH; scalar = 1 }
                                     { print }
   END {
     if (replaced != 1) {

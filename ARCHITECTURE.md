@@ -59,7 +59,9 @@ add meaningful latency. Target is sub-10ms added time-to-first-token.
 **Nothing on the policy path touches the database.** Routes, budgets, team
 membership and spend live in an in-memory snapshot, reloaded on an interval and
 incremented as requests complete. A `SELECT` between a keystroke and the first token
-is exactly what this gateway promises not to do.
+is exactly what this gateway promises not to do. A change still arrives within a
+second: triggers move a counter on every write to the policy's tables, and each
+replica reads that one row every second beside the request path, not on it.
 
 The consequence is stated rather than hidden: a request is priced only after it
 finishes, so enforcement is always against spend as of the last completed request.

@@ -230,11 +230,13 @@ func (d *deployment) waitForRequests(n int) []loggedRequest {
 //
 // It waits for as many rows as have been sent, not for one, because the trail is
 // ordered newest first and a row that has not landed yet would hand back the
-// previous test's request.
+// previous test's request. And for at least one: a request a coding tool sent
+// is not counted in sent, and the row is recorded after the response, so
+// asking straight away can find the trail still empty.
 func (d *deployment) latest() loggedRequest {
 	d.t.Helper()
 
-	rows := d.waitForRequests(int(d.sent.Load()))
+	rows := d.waitForRequests(max(int(d.sent.Load()), 1))
 	return rows[0]
 }
 

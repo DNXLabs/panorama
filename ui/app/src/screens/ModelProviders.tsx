@@ -5,8 +5,11 @@ import { useEffect, useState } from 'react'
 import { post, put } from '../api'
 import { ago, dateTime } from '../format'
 import type {
+  ModelAccess,
   ModelAPI,
   ProviderCheck,
+  ProviderCheckAttempt,
+  ProviderRefusal,
   ProviderOptions,
   ProviderPreflight,
   ProviderRow,
@@ -174,6 +177,8 @@ function ProviderBody({
           {provider.hint && <div className="notice-body">{provider.hint}</div>}
         </div>
       )}
+
+      {provider.last_refusal && <LastRefusal refusal={provider.last_refusal} />}
 
       {canConfigure ? (
         <ProviderForm provider={provider} onSaved={onChanged} />
@@ -473,25 +478,78 @@ function ProviderCheckRow({ provider, onChecked }: { provider: ProviderRow; onCh
   return (
     <div>
       <ErrorBanner error={error} />
+      {result?.refused?.map((attempt) => (
+        <CheckRefusal key={attempt.target} attempt={attempt} />
+      ))}
       {result && !result.ok && (
-        <div className="notice warn" style={{ marginBottom: 18 }}>
-          <div className="notice-title">
-            {result.target ? `${result.target} could not be invoked: ` : ''}
-            {result.error}
-          </div>
-          {result.hint && <div className="notice-body">{result.hint}</div>}
-        </div>
+        <CheckRefusal
+          attempt={{
+            target: result.target,
+            route: result.route,
+            error: result.error ?? '',
+            hint: result.hint ?? '',
+            access: result.access,
+          }}
+        />
       )}
       <div className="iact">
         <ActionButton onAct={check} label="Check" settled="Verified" />
         <span className="iresult">
           {result?.ok
-            ? `Invoked ${result.target} in ${result.region} in ${result.duration_ms} ms.`
-            : 'One real request, one token of output, on the cheapest model this gateway can serve here.'}
+            ? `Invoked ${result.target}${routeNote(result.route)} in ${result.region} in ${result.duration_ms} ms, streamed.`
+            : 'One real request, streamed, one token of output: a route’s model first, otherwise the cheapest model this gateway can serve here.'}
         </span>
       </div>
     </div>
   )
+}
+
+/** One model a check could not invoke, in the provider's words, with the fix
+ *  and what Bedrock reports about the model beside it. */
+function CheckRefusal({ attempt }: { attempt: ProviderCheckAttempt }) {
+  return (
+    <div className="notice warn" style={{ marginBottom: 18 }}>
+      <div className="notice-title">
+        {attempt.target ? `${attempt.target}${routeNote(attempt.route)} could not be invoked: ` : ''}
+        {attempt.error}
+      </div>
+      {attempt.hint && <div className="notice-body">{attempt.hint}</div>}
+      {attempt.access && <div className="notice-body">{accessLine(attempt.access)}</div>}
+    </div>
+  )
+}
+
+/**
+ * The latest request this provider refused, which an engineer was told to ask
+ * an administrator about. Bedrock's own words are the point: "not found" covers
+ * an unsubmitted use case form and a retired model alike, and only the
+ * sentence AWS wrote says which.
+ */
+function LastRefusal({ refusal }: { refusal: ProviderRefusal }) {
+  return (
+    <div className="notice warn">
+      <div className="notice-title">
+        Last refused request, {dateTime(refusal.at)} · {refusal.model}: {refusal.error}
+      </div>
+      {refusal.hint && <div className="notice-body">{refusal.hint}</div>}
+      <div className="notice-body">
+        Request {refusal.request_id || 'without an id'} in {refusal.region}. A check that invokes this
+        model clears this.
+      </div>
+    </div>
+  )
+}
+
+function routeNote(route?: string): string {
+  return route ? ` (route ${route})` : ''
+}
+
+/** Bedrock's availability report, read as a sentence. The agreement reads
+ *  NOT_AVAILABLE until a model is first invoked, so it is reported and not
+ *  interpreted. */
+function accessLine(access: ModelAccess): string {
+  const base = `Bedrock reports for ${access.model}: agreement ${access.agreement || '-'}, authorization ${access.authorization || '-'}, entitlement ${access.entitlement || '-'}, region ${access.region || '-'}.`
+  return access.agreement_error ? `${base} The agreement says: ${access.agreement_error}` : base
 }
 
 /** The role policy, folded. It is sixty lines that somebody reads once, while

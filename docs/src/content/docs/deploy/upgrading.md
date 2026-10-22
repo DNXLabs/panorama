@@ -25,15 +25,17 @@ whatever the release needs from the stack (a new permission, a new setting)
 with it:
 
 ```sh
+REGION=us-east-1   # the region the stack is in
+
 # 1. The new release's template, deployed with no tasks running
 curl -fsSLO https://github.com/dnxlabs/panorama/releases/download/v1.4.0/panorama.yaml
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=0
 
 # 2. Run the MigrateCommand stack output, and wait for exit code 0
 
 # 3. Roll the service
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=2
 ```
 

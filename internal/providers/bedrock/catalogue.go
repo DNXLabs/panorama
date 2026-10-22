@@ -63,6 +63,9 @@ func NewCatalogue(ctx context.Context, conf Config) (*Catalogue, error) {
 	}, nil
 }
 
+// The catalogue's client is the one that can answer for a model's access.
+var _ providers.AccessReporter = (*Catalogue)(nil)
+
 // Region reports which region was discovered.
 func (c *Catalogue) Region() string { return c.region }
 
@@ -380,6 +383,40 @@ func geographyOf(profileID string) string {
 var knownGeographies = map[string]struct{}{
 	"global": {}, "us": {}, "us-gov": {}, "eu": {}, "apac": {}, "jp": {},
 	"au": {}, "ca": {}, "sa": {}, "in": {}, "il": {}, "mx": {}, "kr": {},
+}
+
+// ModelAccess asks Bedrock what it says about one model's availability to this
+// account: GetFoundationModelAvailability, for the foundation model behind an
+// inference profile.
+//
+// On the catalogue rather than the invoking provider because it is a
+// control-plane call, on the client discovery already holds. Evidence beside
+// a refusal and nothing more - see providers.ModelAccess. Checked against the
+// live API: every Anthropic model in an account reads agreement NOT_AVAILABLE
+// until it is first invoked, and a model refused as "not available for this
+// account" still reads AUTHORIZED and AVAILABLE throughout.
+func (c *Catalogue) ModelAccess(ctx context.Context, model string) (providers.ModelAccess, error) {
+	id := model
+	if g := geographyOf(id); g != "" {
+		id = strings.TrimPrefix(id, g+".")
+	}
+	out, err := c.models.GetFoundationModelAvailability(ctx, &awsbedrock.GetFoundationModelAvailabilityInput{
+		ModelId: &id,
+	})
+	if err != nil {
+		return providers.ModelAccess{}, fmt.Errorf("bedrock: model availability for %s in %s: %w", id, c.region, err)
+	}
+	access := providers.ModelAccess{
+		Model:         id,
+		Authorization: string(out.AuthorizationStatus),
+		Entitlement:   string(out.EntitlementAvailability),
+		Region:        string(out.RegionAvailability),
+	}
+	if a := out.AgreementAvailability; a != nil {
+		access.Agreement = string(a.Status)
+		access.AgreementError = derefString(a.ErrorMessage)
+	}
+	return access, nil
 }
 
 func derefString(s *string) string {

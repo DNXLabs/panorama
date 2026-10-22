@@ -146,6 +146,14 @@ type Descriptor struct {
 	// Hint turns the text of a failed live check into the fix, in the words of
 	// the console page somebody has to open.
 	Hint func(message string) string
+	// ModelSpecific reports that a failure, by its text, refused one model
+	// rather than the deployment: a model this account is not offered, or one
+	// that has been retired. The live check moves on to another model after
+	// one of these, because the question it answers is whether the deployment
+	// can invoke anything - and stops at any other, because a missing
+	// permission or an unsubmitted form fails the next model identically. Nil
+	// means no failure is model-specific.
+	ModelSpecific func(message string) bool
 	// Policy is the IAM policy the deployment's role needs for this kind, as
 	// JSON to paste. Both Bedrock kinds share one.
 	Policy string
@@ -232,6 +240,18 @@ func (r *Registry) Descriptor(k Kind) (Descriptor, bool) {
 	}
 	d, ok := r.descriptors[k]
 	return d, ok
+}
+
+// Hint is a kind's fix for a failure, by the failure's text, or empty for a
+// kind this registry does not know. One door onto Descriptor.Hint for the data
+// plane's log line and the console's last refusal, so the two cannot name
+// different fixes for the same words.
+func (r *Registry) Hint(k Kind, message string) string {
+	d, ok := r.Descriptor(k)
+	if !ok || d.Hint == nil {
+		return ""
+	}
+	return d.Hint(message)
 }
 
 // Descriptors lists every registered kind, in the order a screen offers them.

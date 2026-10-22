@@ -32,6 +32,7 @@ import (
 	"github.com/dnxlabs/panorama/internal/attribution"
 	"github.com/dnxlabs/panorama/internal/policy"
 	"github.com/dnxlabs/panorama/internal/pricing"
+	"github.com/dnxlabs/panorama/internal/providers"
 	"github.com/dnxlabs/panorama/internal/store"
 	"github.com/dnxlabs/panorama/internal/tools"
 	"github.com/dnxlabs/panorama/internal/websearch"
@@ -64,7 +65,11 @@ type Options struct {
 	Sessions *attribution.Sessions
 	// WebSearch holds the backend /mcp searches with. Nil serves no search,
 	// and the endpoint lists no tools.
-	WebSearch    *websearch.Service
+	WebSearch *websearch.Service
+	// Hint names the fix for a provider failure by its text, for the log line
+	// that records it (providers.Registry.Hint). Nil logs the failure without
+	// one.
+	Hint         func(kind providers.Kind, message string) string
 	Logger       *slog.Logger
 	MaxBodyBytes int64
 }
@@ -77,6 +82,7 @@ type DataPlane struct {
 	extractor    *attribution.Extractor
 	sessions     *attribution.Sessions
 	webSearch    *websearch.Service
+	hint         func(kind providers.Kind, message string) string
 	log          *slog.Logger
 	maxBodyBytes int64
 
@@ -106,6 +112,7 @@ func New(opts Options) *DataPlane {
 		extractor:    opts.Attribution,
 		sessions:     opts.Sessions,
 		webSearch:    opts.WebSearch,
+		hint:         opts.Hint,
 		log:          opts.Logger,
 		maxBodyBytes: maxBody,
 	}

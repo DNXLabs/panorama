@@ -29,42 +29,122 @@ at an error in your coding tool, see
 
 ## The provider check fails
 
-**Check**, on **Settings → Model providers**, makes one real request, and the
-block shows the provider's own error when it fails. From a shell it is
-`panorama providers check bedrock`. The cause is one of these:
+**Check**, on **Settings → Model providers**, makes one real request, streamed
+the way a coding tool streams, and the block shows Bedrock's own words when it
+fails. From a shell it is `panorama providers check bedrock`. With no model
+named, it tries the model of each route on the provider first, then the
+cheapest model the provider can serve.
 
-**No credentials in the container.** The error contains `get credentials:
-failed to refresh cached credentials`. On a server, attach an instance role. On
-a laptop, see [On your laptop](/docs/deploy/laptop/#start-it). Panorama uses
-the AWS default credential chain and has no field for a key.
+When Bedrock refuses one model for a reason that belongs to that model, such as
+a model AWS does not offer the account or a retired one, the check says so and
+tries the next model, up to three. It passes if any model answered, and lists
+the ones that did not. Any other refusal stops it at the first model, because
+the next one would fail the same way.
 
-**Expired credentials**, which is the usual one on a laptop. The error contains
-`ExpiredTokenException`. Temporary credentials exported into `.env` last a few
-hours and do not renew themselves. Export them again and run `up -d` again. A
-role attached to a server does not have this problem.
+Under a refusal the check also shows what Bedrock reports about the model:
+`agreement`, `authorization`, `entitlement` and `region`. Read it as evidence,
+not as the answer. `agreement NOT_AVAILABLE` is normal for a model nobody in
+the account has invoked yet, and a model can read `AUTHORIZED` and `AVAILABLE`
+everywhere and still be refused.
 
-On a new deployment the same two errors can arrive from *listing* models and
-not from invoking one, because a check with an empty catalogue reads the
-catalogue first. The cause and the fix are the same.
+The causes, by the words in the error:
 
-**`AccessDenied`.** Three different problems produce the same error, which is
-why only a real request finds them:
+### No credentials in the container
+
+The error contains `get credentials: failed to refresh cached credentials`. On
+a server, attach an instance role. On a laptop, see
+[On your laptop](/docs/deploy/laptop/#start-it). Panorama uses the AWS default
+credential chain and has no field for a key.
+
+### Expired credentials
+
+The usual one on a laptop. The error contains `ExpiredTokenException`.
+Temporary credentials exported into `.env` last a few hours and do not renew
+themselves. Export them again and run `up -d` again. A role attached to a
+server does not have this problem.
+
+On a new deployment these two can arrive from *listing* models rather than
+invoking one, because a check with an empty catalogue reads the catalogue
+first. The cause and the fix are the same.
+
+### The Anthropic use case form
+
+The error reads `Model use case details have not been submitted for this
+account`. Anthropic asks every AWS account to describe its use case once before
+any of its models can be invoked. Nothing in Panorama's role or configuration
+changes this.
+
+1. In the Amazon Bedrock console, in the region your provider uses, open the
+   **Model catalog** and choose any Anthropic model.
+2. Submit the use case details it asks for. Once covers every Anthropic model
+   in the account.
+3. Wait up to 15 minutes, then press **Check** again.
+
+Every Anthropic model fails the same way until then, so the check does not try
+another.
+
+### The model is not available for this account
+
+The error reads `... is not available for this account`. AWS decides which
+models each account is offered, and this account has not been offered this
+one. It is not a permission: no IAM change grants it. Point the route at
+another model, or ask your AWS account team for access. The check moves on to
+the next model and reports this one as refused.
+
+### Bedrock has not finished subscribing the account
+
+The error reads `You don't have access to the model with the specified model
+ID`, or mentions `aws-marketplace`. Bedrock subscribes the account to a model
+through AWS Marketplace the first time it is invoked, and requests can be
+refused for a few minutes until the subscription is active. There is no longer
+a **Model access** page to enable anything on.
+
+- Press **Check** again after a few minutes. Most of the time that is all.
+- If it is still refused after 15 minutes, open **AWS Marketplace → Manage
+  subscriptions** for a failed or pending agreement for the model. The `agreement`
+  line under the refusal can show its error.
+- Make sure the role has `aws-marketplace:Subscribe` and
+  `aws-marketplace:ViewSubscriptions`, which **Role policy** includes, and that
+  no service control policy denies them.
+
+### Not authorized, or an explicit deny
+
+The error reads `is not authorized to perform`. Two causes:
 
 - The role lacks the policy. Compare it with **Role policy** on the same
   screen.
-- A **service control policy** in your AWS organization denies
-  `bedrock:InvokeModel`. Nothing in the account shows this. Ask whoever runs
-  the organization.
-- The account has never used that model, and the role lacks
-  `aws-marketplace:Subscribe`, which Bedrock needs to subscribe on first use.
-  The policy above includes it.
+- The error ends `with an explicit deny in a service control policy`, or names a
+  permissions boundary. A policy above the role refuses it, and granting the
+  role more cannot override that. Ask whoever runs the AWS organization.
 
-**A timeout, from private subnets.** There is no route to Bedrock. You need a
-NAT gateway or the `bedrock-runtime` VPC endpoint. See
-[Connectivity](/docs/deploy/aws/#connectivity).
+### The model has been retired
 
-**It passes in one region and you changed region.** A region change clears the
-check. Run it again.
+The error reads `reached the end of its life`. Point the route at a current
+model from the catalogue.
+
+### A timeout, from private subnets
+
+There is no route to Bedrock. You need a NAT gateway or the `bedrock-runtime`
+VPC endpoint. See [Connectivity](/docs/deploy/aws/#connectivity).
+
+### It passed in one region and you changed region
+
+A region change clears the check. Run it again.
+
+## Engineers report "Bedrock refused this model"
+
+An engineer whose request Bedrock refused sees *"Bedrock refused this model for
+this Panorama deployment's AWS account"*. They are not shown Bedrock's reason,
+because it names your account and its roles.
+
+You can see it. **Settings → Model providers** shows the provider's **last
+refused request**: when, which model, Bedrock's own words, what to do about
+them, and the `request_id` the engineer was given. The causes are the ones
+[the provider check](#the-provider-check-fails) meets, and the same fixes apply.
+The log line `provider invocation failed` carries the same words and a `hint`.
+
+Once a **Check** invokes that model successfully, the last refused request is
+cleared.
 
 ## The model catalogue is empty
 
@@ -99,8 +179,13 @@ sign-on, check the model providers, and, under **Administrators**, make an
 account an administrator again. It cannot reach anything else, by design. See
 [Credentials](/docs/reference/credentials/#setup-codes).
 
-**On your own laptop with no identity provider**, use the development sign-in.
-See [On your laptop](/docs/deploy/laptop/#start-it).
+**On a deployment with no identity provider**, sign in with a gateway token:
+mint one with `panorama token create -email you@example.com -role admin` where
+the deployment runs, and paste it on the sign-in screen. See
+[Sign in to the console with a gateway token](/docs/reference/credentials/#sign-in-to-the-console-with-a-gateway-token).
+
+**On your own laptop with no identity provider**, the development sign-in is
+quicker. See [On your laptop](/docs/deploy/laptop/#start-it).
 
 ## A command succeeded and nothing changed
 

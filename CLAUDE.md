@@ -372,12 +372,26 @@ administrator's, made once there is an administrator. Folding them together
 would ask somebody holding a one-time code to decide which models a company pays
 for and which country its prompts are processed in, and would make the provider
 check impossible to run until a route existed, at the exact moment an operator
-most needs to know whether their credentials work. The check therefore invokes a
-target from that provider's discovered catalogue (servable, streaming,
-available, not `LEGACY`, Anthropic first, cheapest first) rather than a route,
-and records the verification on the provider row. A region change clears it in
-the same statement, because a check that passed in one region says nothing about
-another.
+most needs to know whether their credentials work. The check therefore needs no
+route: it invokes the models of this provider's routes first, when there are
+any, because a check that proved the cheapest model said nothing about the one
+engineers are served and passed seconds before their first request failed; and
+then a target from the discovered catalogue (servable, streaming, available,
+not `LEGACY`, Anthropic first, cheapest first). It **streams** and reads the
+stream to its end, because a coding tool does, and records the verification on
+the provider row. A region change clears it in the same statement, because a
+check that passed in one region says nothing about another.
+
+**A check moves past a model only when the refusal is that model's.** Bedrock
+refuses some models to some accounts ("is not available for this account"), and
+retires others, and neither says anything about the deployment, so the check
+reports the refusal and tries the next candidate, at most three
+(`Descriptor.ModelSpecific`). Every other refusal - credentials, IAM, an SCP,
+Anthropic's use case form, which covers every Anthropic model at once - stops it
+at the first model, because the next would fail identically and the finding
+would be buried under a list. Reporting a model the account is not offered as
+broken credentials is how somebody ends up granting IAM actions to fix a sales
+conversation.
 
 **A check with nothing to pick from reads the catalogue itself, and a catalogue
 it cannot read is its finding.** A laptop with expired credentials fails
@@ -395,6 +409,22 @@ denying `bedrock:InvokeModel`, which is how AWS documents actually blocking a
 model, is **invisible** to it. So the live invocation in the setup step is not a
 nicety: an SCP, a missing `aws-marketplace:Subscribe`, and a wrong identifier all
 arrive as the same `AccessDenied`, and one real request is what tells them apart.
+What tells them apart is the sentence AWS wrote, not the exception: checked
+live, an unsubmitted Anthropic use case form and a retired model are both
+`ResourceNotFoundException`, and a model AWS does not offer the account is
+`AccessDeniedException` while `GetFoundationModelAvailability` reads
+`AUTHORIZED` and `AVAILABLE` for it. So the check shows that call's answer
+beside a refusal as evidence (`providers.AccessReporter`), and never picks a
+model or decides anything from it.
+
+**A refusal reaches the administrator, not the engineer.** A not-found or
+not-permitted invocation tells the engineer only that Bedrock refused the model
+for the deployment's account and where an administrator can see why: AWS's
+words name the account and its roles. The words are kept - `providers.Error.Detail`,
+the latest per provider in `provider_failures`, never a column of `providers`
+because a refused request is not a configuration change - and shown on
+Settings, Model providers with the hint. Only those two kinds are kept, so no
+text derived from a request body is ever stored.
 
 ## The console
 
@@ -591,6 +621,19 @@ shape.
 
 - **Gateway tokens** (`pnt_`) are what a coding tool holds. They also
   authenticate the console API, for scripts and for a deployment before SSO.
+
+  **Until SSO is configured, one also signs a browser in.** `POST
+  /api/v1/auth/token` exchanges a personal gateway token for an ordinary
+  console session as its owner, which is how a deployment evaluated without an
+  identity provider is used at all: `panorama token create` makes the account
+  and the token, and the gate takes it. It grants nothing the token did not
+  already reach through `/api/v1`. It is registered only while
+  `oidc.issuer` is empty, decided at startup like the development sign-in, so
+  a deployment behind its identity provider (and that provider's MFA) has no
+  second door a dotfile token would open. It takes `pnt_` only, refuses any
+  body that is not `application/json` (a cross-site form could otherwise sign a
+  victim in as the attacker), and shares the setup code's limiter. See
+  `token_sign_in.go`.
   Minted by hand in the console, or — the recommended path — by a CLI grant,
   short-lived and rotating.
 
@@ -1282,7 +1325,9 @@ gateway without the product.
 **Two facts the manual and the README both depend on.** Without single sign-on, a setup code reaches the
 identity connection, the model providers and the administrators list, which are
 the routes wrapped in `setup(...)` in `admin.go`, and nothing else. A gateway
-token authenticates `/api/v1` and not a browser. The Quickstart therefore
+token authenticates `/api/v1`, and signs a browser in to the console only
+until single sign-on is configured; it is the evaluation path, not the
+product's. The Quickstart therefore
 connects single sign-on before anything else, and nothing seeds a route, so its
 route step says plainly that every request is refused until one exists. And service tokens have no screen; they are created through
 `POST /api/v1/service-tokens`, which is the one task the manual sends an
@@ -1314,7 +1359,30 @@ else). An empty `ImageTag`, the default, runs the mapping's version: a
 parameter's default would be stored with the stack and survive the next
 template, and a mapping is not. Every `aws cloudformation deploy` on an
 existing stack names `DesiredCount` explicitly, because a parameter left out
-keeps its current value.
+keeps its current value. **Every `aws` command in the manual and the READMEs
+names `--region "$REGION"`**, because the CLI otherwise takes `AWS_REGION`
+or the profile's, CloudShell sets the console's, and a command sent to the
+wrong region reads as a stack that does not exist. A one-off task reads its
+network from the `RunTaskNetwork` output rather than spelling out subnets and
+an `assignPublicIp` that is right for only one network shape.
+
+**The rendered template stays under 51,200 bytes**, and CI checks it.
+`aws cloudformation deploy --template-file` sends the body inline unless
+given a bucket, and every documented deploy is that form; past the limit they
+all fail while the Launch Stack button, which reads from S3, keeps working.
+`release-template.sh` drops comments and blank lines outside block scalars,
+which are a third of the file, so the repository's copy keeps its reasoning
+and the shipped one about 16 KB of headroom.
+`TestTheReleaseTemplateMeansTheSame` parses both and allows exactly one
+difference, the release's tag; a renderer that dropped a line of content would
+still produce valid YAML that deploys something else.
+
+**A release proves its own addresses.** `release.yml`'s last job fetches,
+anonymously, what the README points at: the image by version and channel,
+the template in the public bucket under both, and
+`releases/latest/download/panorama.yaml`. All three were once missing while
+every build step was green, because no release had ever been marked stable; a
+prerelease warns about that state and a release fails on it.
 
 **Sections are grouped by who is reading**: deciding, deploying, administering,
 using a coding tool, then reference and how it works. The *Administer* pages
@@ -1735,6 +1803,16 @@ requests complete. A `SELECT` between a keystroke and the first token is exactly
 this gateway promises not to do. The consequence is stated rather than hidden: a request
 is priced only after it finishes, so enforcement is always against spend as of the last
 completed request.
+
+**A policy change is served within a second, everywhere, without a query on the request
+path.** Triggers on exactly the tables `LoadPolicy` reads (`model_routes`, `budgets`,
+`team_members`, `providers`, `cost_centers`) move one row of `policy_generation`, and
+`Engine.Run` reads it every `policy.GenerationPollInterval` and reloads when it has moved.
+Without it a route applied from a one-off task, or saved on another replica, was refused
+as a name nobody created until the next reload. Triggers rather than the writers, because
+the write path that forgot would be the one whose change appears to do nothing; a table
+added to the snapshot needs its trigger in a new migration in both dialects. The reload
+interval still reconciles spend, which is the query with a cost.
 
 **A blocked request must never count against the budget that blocked it.** The predicate
 is `attempts > 0` — did a provider actually get invoked — and it is applied identically

@@ -96,7 +96,7 @@ Matching ignores case, so capitalisation is never the cause.
   `AADSTS7000222`. Create a new secret, apply it, and restart.
 - **Somebody changed the configuration and did not restart.** The connection is
   read once, at startup. On AWS that means
-  `aws ecs update-service --force-new-deployment`.
+  `aws ecs update-service --region <region> --cluster panorama --service panorama --force-new-deployment`.
 - **The console's address changed.** The redirect URI is built from
   `server.base_url`, so a new address is a new redirect URI, and it has to be
   registered at the provider.

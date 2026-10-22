@@ -102,6 +102,8 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       channel: ${{ steps.tags.outputs.channel }}
+      prerelease: ${{ steps.tags.outputs.prerelease }}
+      digest: ${{ steps.build.outputs.digest }}
 
     # Runs only where the repository variable PUBLISH is 'true': this
     # repository and the public one, never a fork, which does not have it and
@@ -648,3 +650,93 @@ jobs:
             echo "- $url"
             echo "- [Launch stack]($launch)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # What somebody following the README gets, fetched the way they fetch it:
+  # anonymously, from the public addresses, after everything above has
+  # finished. Each of the three was once broken while every step above was
+  # green - no stable release existed, so the README's latest-release link,
+  # the Launch Stack button's stable/ template and the template's own default
+  # image tag all named nothing - and only a stranger's request finds that.
+  #
+  # Nothing here holds a credential, on purpose: a check made with the
+  # publishing role would pass on an object only that role can read.
+  verify:
+    name: Verify what was published
+    needs: [publish, template]
+    if: vars.PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.publish.outputs.tag }}
+      CHANNEL: ${{ needs.publish.outputs.channel }}
+      PRERELEASE: ${{ needs.publish.outputs.prerelease }}
+      DIGEST: ${{ needs.publish.outputs.digest }}
+    steps:
+      - uses: docker/setup-buildx-action@v4
+
+      - name: The release's own template
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p panorama.yaml -O released.yaml
+          grep -Fxq "      Tag: $TAG" released.yaml || {
+            echo "::error::the template attached to $TAG does not run $TAG"
+            exit 1
+          }
+
+      # A failure is collected rather than fatal, so one run reports every
+      # address that is wrong instead of the first.
+      - name: The public addresses serve this release
+        run: |
+          set -uo pipefail
+          failed=0
+          fail() { echo "::error::$*"; failed=1; }
+
+          # name ADDRESS - the digest a public image reference resolves to.
+          digest_of() {
+            docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}' 2>/dev/null
+          }
+          # fetch URL FILE - the body, or a failure naming the status.
+          fetch() {
+            status=$(curl -sS -L -o "$2" -w '%{http_code}' "$1")
+            [ "$status" = 200 ] || { fail "$1 answered $status"; return 1; }
+          }
+
+          image=public.ecr.aws/dnxsolutions/panorama
+          [ "$(digest_of "$image:$TAG")" = "$DIGEST" ] || fail "$image:$TAG is not $DIGEST"
+
+          bucket=https://panorama-public-artifacts.s3.amazonaws.com/panorama
+          if fetch "$bucket/$TAG/panorama.yaml" version.yaml; then
+            cmp -s version.yaml released.yaml || fail "$bucket/$TAG/panorama.yaml is not the template attached to $TAG"
+          fi
+
+          if [ "$CHANNEL" != none ]; then
+            [ "$(digest_of "$image:$CHANNEL")" = "$DIGEST" ] || fail "$image:$CHANNEL is not $DIGEST"
+            if fetch "$bucket/$CHANNEL/panorama.yaml" channel.yaml; then
+              cmp -s channel.yaml released.yaml || fail "$bucket/$CHANNEL/panorama.yaml is not the template attached to $TAG"
+            fi
+          fi
+
+          # The README's own commands, which name stable and latest and nothing
+          # else. A stable release must make them serve itself or a higher
+          # release; a prerelease cannot fix them, but says loudly when they are
+          # broken, because that is the state a deployment test meets first.
+          stable_problem() {
+            if [ "$PRERELEASE" = true ]; then echo "::warning::$*"; else fail "$*"; fi
+          }
+          latest=https://github.com/$GITHUB_REPOSITORY/releases/latest/download/panorama.yaml
+          if [ "$(curl -sS -L -o latest.yaml -w '%{http_code}' "$latest")" != 200 ]; then
+            stable_problem "$latest serves nothing: no stable release carries a template"
+          elif [ "$CHANNEL" = stable ] && ! cmp -s latest.yaml released.yaml; then
+            fail "$latest is not the template attached to $TAG"
+          fi
+          if [ "$(curl -sS -o /dev/null -w '%{http_code}' "$bucket/stable/panorama.yaml")" != 200 ]; then
+            stable_problem "$bucket/stable/panorama.yaml, which the Launch Stack button opens, serves nothing"
+          fi
+          if [ -z "$(digest_of "$image:stable")" ]; then
+            stable_problem "$image:stable does not exist, and the repository's copy of the template runs it"
+          fi
+
+          exit "$failed"

@@ -48,17 +48,32 @@ coding tool's first request; this page has the detail behind each step.
 2. **An ACM certificate** for the hostname, in the region you deploy to.
 3. **Decide about VPC endpoints** if your private subnets have no NAT gateway.
    See [Connectivity](#connectivity).
+4. **Decide who may reach it.** `IngressCidr` takes up to four CIDRs separated
+   by commas, such as `203.0.113.0/24,198.51.100.7/32`, and defaults to
+   everybody. For more ranges, put them in a managed prefix list and pass its
+   id as `IngressPrefixListId`; leave `IngressCidr` empty to admit only the
+   list.
 
 The image is public, at `public.ecr.aws/dnxsolutions/panorama`, so there is nothing
 to request first.
 
-You do not need to request Bedrock model access. See
-[Requirements](/docs/deploy/requirements/#you-do-not-need-to-request-model-access).
+You do not need to request Bedrock model access, but an account that has never
+used Claude submits Anthropic's use case form once first. See
+[Model access](/docs/deploy/requirements/#model-access).
 
 ## Deploy
 
 The first deploy is three commands, because database migrations run before the
 service starts.
+
+Every command on this page names its region with `--region "$REGION"`. Set it
+once in each terminal you use. Without it the AWS CLI uses `AWS_REGION` or your
+profile's region, which in AWS CloudShell is the console's, and a command run
+against the wrong region fails as though the stack did not exist:
+
+```sh
+REGION=us-east-1   # the region the stack is in
+```
 
 ### 1. Create the stack with no tasks
 
@@ -69,7 +84,7 @@ release's version. Take the latest one, or a particular release's from
 ```sh
 curl -fsSLO https://github.com/dnxlabs/panorama/releases/latest/download/panorama.yaml
 
-aws cloudformation deploy \
+aws cloudformation deploy --region "$REGION" \
   --stack-name panorama \
   --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM \
@@ -97,14 +112,14 @@ The stack outputs the exact command, filled in with your cluster, subnets and
 security group:
 
 ```sh
-aws cloudformation describe-stacks --stack-name panorama \
+aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
   --query "Stacks[0].Outputs[?OutputKey=='MigrateCommand'].OutputValue" --output text
 ```
 
 Run what it prints, wait for the task to stop, and confirm it exited zero:
 
 ```sh
-aws ecs describe-tasks --cluster panorama --tasks <task-arn> \
+aws ecs describe-tasks --region "$REGION" --cluster panorama --tasks <task-arn> \
   --query "tasks[0].containers[0].exitCode"
 ```
 
@@ -113,7 +128,7 @@ A non-zero exit is explained in CloudWatch Logs under `/aws/ecs/panorama`.
 ### 3. Start the service
 
 ```sh
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=2
 ```
 
@@ -133,10 +148,16 @@ setup code. Mint one with a one-off task. With two tasks running, reading the
 code out of the service's startup logs is unreliable: both mint one and only
 the later one works.
 
+The `RunTaskNetwork` stack output is the service's network, subnets, security
+group and public IP setting included, so a one-off task reaches what the
+service reaches:
+
 ```sh
-aws ecs run-task --cluster panorama --task-definition panorama \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-aaa,subnet-bbb],securityGroups=[<ServiceSecurityGroupId>],assignPublicIp=DISABLED}" \
+NETWORK=$(aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
+  --query "Stacks[0].Outputs[?OutputKey=='RunTaskNetwork'].OutputValue" --output text)
+
+aws ecs run-task --region "$REGION" --cluster panorama --task-definition panorama \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
   --overrides '{"containerOverrides":[{"name":"panorama","command":["admin","setup"]}]}'
 ```
 
@@ -145,6 +166,25 @@ it, then connect single sign-on as described next.
 
 The cluster, log group and task family are all named after the stack, so these
 commands assume you called it `panorama`.
+
+### Evaluating without an identity provider
+
+If you have no identity provider to connect yet, skip the setup code and mint
+an administrator's gateway token instead, with the same one-off task and the
+same `NETWORK`:
+
+```sh
+aws ecs run-task --region "$REGION" --cluster panorama --task-definition panorama \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
+  --overrides '{"containerOverrides":[{"name":"panorama","command":["token","create","-email","you@example.com","-role","admin"]}]}'
+```
+
+The token is in that task's log stream. Open the `ConsoleUrl` output, paste it
+under **Gateway token** and press **Sign in**. The console is then yours, as an
+administrator, until you connect single sign-on, at which point the token field
+disappears and you sign in through your provider. Accounts for anybody else
+need a token each, minted the same way. The task's log holds the token, so
+delete that log stream once you have copied it.
 
 ## Connect single sign-on
 
@@ -158,10 +198,10 @@ press **Check this connection**. The screen prints the secret value with your
 details filled in. Then:
 
 ```sh
-SECRET=$(aws cloudformation describe-stacks --stack-name panorama \
+SECRET=$(aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
   --query "Stacks[0].Outputs[?OutputKey=='OidcSecretArn'].OutputValue" --output text)
 
-aws secretsmanager put-secret-value --secret-id "$SECRET" --secret-string '{
+aws secretsmanager put-secret-value --region "$REGION" --secret-id "$SECRET" --secret-string '{
   "issuer":        "https://login.microsoftonline.com/<tenant>/v2.0",
   "client_id":     "...",
   "client_secret": "...",
@@ -169,7 +209,7 @@ aws secretsmanager put-secret-value --secret-id "$SECRET" --secret-string '{
   "groups_claim":  ""
 }'
 
-aws ecs update-service --cluster panorama --service panorama --force-new-deployment
+aws ecs update-service --region "$REGION" --cluster panorama --service panorama --force-new-deployment
 ```
 
 The last command is not optional. A task reads the secret once, when it starts.
@@ -292,9 +332,11 @@ task here, built from the current task definition, so it uses the same image,
 database and secrets as the service:
 
 ```sh
-aws ecs run-task --cluster panorama --task-definition panorama \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[<service-subnets>],securityGroups=[<ServiceSecurityGroupId>],assignPublicIp=<AssignPublicIp>}" \
+NETWORK=$(aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
+  --query "Stacks[0].Outputs[?OutputKey=='RunTaskNetwork'].OutputValue" --output text)
+
+aws ecs run-task --region "$REGION" --cluster panorama --task-definition panorama \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
   --overrides '{"containerOverrides":[{"name":"panorama","command":["sso","doctor"]}]}'
 ```
 
@@ -306,12 +348,76 @@ in that task's log stream.
 For a shell in a running task, ECS Exec is enabled:
 
 ```sh
-aws ecs execute-command --cluster panorama --task <task-id> \
+aws ecs execute-command --region "$REGION" --cluster panorama --task <task-id> \
   --container panorama --interactive --command /busybox/sh
 ```
 
 That shell runs as root beside the Bedrock credentials and the database
 connection, so control who holds `ecs:ExecuteCommand` on this cluster.
+
+## What it costs
+
+The stack runs around the clock, and the database is most of the bill. With the
+default parameters, before any Bedrock usage:
+
+| | Sydney (`ap-southeast-2`) | N. Virginia (`us-east-1`) |
+| --- | --- | --- |
+| Aurora Serverless v2, 0.5 capacity units at all times | $73 | $44 |
+| Application Load Balancer, hourly charge and light traffic | $21 | $19 |
+| Two Fargate tasks, ARM64, 0.5 vCPU and 1 GB each | $35 | $29 |
+| Two public IPv4 addresses on the load balancer | $7 | $7 |
+| Three Secrets Manager secrets | $1 | $1 |
+| **About, per month** | **$137** | **$100** |
+
+Prices are AWS's on-demand list prices in US dollars, for 730 hours. Container
+Insights metrics, CloudWatch Logs and database storage add a few dollars more
+with light use. A NAT gateway is not part of the stack; if your private subnets
+need one for Panorama alone, it adds about $43 a month in Sydney and $33 in
+N. Virginia.
+
+The database cannot go lower. Its minimum of 0.5 capacity units is the smallest
+that stays running, and a capacity of 0, which lets Aurora pause, is never
+reached, because the gateway checks its configuration every second.
+
+### A cheaper deployment for an evaluation
+
+For a trial that nobody depends on, these parameters run one task instead of
+two, about $17 a month less in Sydney, need no NAT gateway, and remove the
+migration step:
+
+```sh
+aws cloudformation deploy --region "$REGION" \
+  --stack-name panorama \
+  --template-file panorama.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides \
+      VpcId=vpc-0123456789abcdef0 \
+      ServiceSubnetIds=subnet-ccc,subnet-ddd \
+      LoadBalancerSubnetIds=subnet-ccc,subnet-ddd \
+      AssignPublicIp=ENABLED \
+      DomainName=panorama.example.com \
+      CertificateArn=arn:aws:acm:us-east-1:111122223333:certificate/... \
+      DesiredCount=1 \
+      AutoMigrate=true
+```
+
+- **One task** (`DesiredCount=1`). It does not survive the loss of an
+  availability zone, and a deploy replaces it with a short gap.
+- **Migrations at startup** (`AutoMigrate=true`), which is safe with exactly one
+  task and is why there is no migration step.
+- **Public subnets** for the tasks and the database (`AssignPublicIp=ENABLED`),
+  so no NAT gateway is needed. The database is still reachable only from the
+  tasks.
+
+A certificate is still required: every credential Panorama issues is a bearer
+token, and the load balancer serves only HTTPS. A certificate from ACM costs
+nothing. To go from here to production, set `DesiredCount=2` and
+`AutoMigrate=false`.
+
+**Cheaper still is one small server.** [Deploying on a
+server](/docs/deploy/server/) runs Panorama with Docker Compose and SQLite on
+one machine; a `t4g.small` is about $15 a month in Sydney. It is the same
+console and gateway without the managed database or the load balancer.
 
 ## Four settings you should not tune casually
 
@@ -376,6 +482,13 @@ changed in **Settings → Model providers**.
   The audit trail shows the load balancer's address.
 - **SQLite is not an option here.** It allows one writer, so it cannot back two
   tasks.
+
+## Log groups
+
+The stack keeps three log groups, all with the `LogRetentionDays` parameter's
+retention and all deleted with the stack: the service's own,
+`/aws/ecs/<stack>`, the database's, `/aws/rds/cluster/<cluster>/postgresql`,
+and Container Insights', `/aws/ecs/containerinsights/<stack>/performance`.
 
 ## More
 

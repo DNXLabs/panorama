@@ -53,7 +53,15 @@ directory.
 :::
 
 You do not need to request Bedrock model access, and the image is public, at
-`public.ecr.aws/dnxsolutions/panorama`, so there is nothing to ask for first.
+`public.ecr.aws/dnxsolutions/panorama`. **If this AWS account has never used
+Claude on Bedrock**, submit Anthropic's use case form in the Amazon Bedrock
+console first; until then every Claude request is refused. See
+[Model access](/docs/deploy/requirements/#model-access).
+
+**While it runs, the stack costs about US$137 a month** in Sydney and about
+US$100 in N. Virginia, most of it the database. See
+[What it costs](/docs/deploy/aws/#what-it-costs), which also has a cheaper
+setup for an evaluation.
 
 ## 1. Create the stack
 
@@ -75,10 +83,16 @@ stack**.
 
 ### Or with the AWS CLI
 
+Every command in this guide names its region. Set `REGION` once in each
+terminal you use; without it the AWS CLI falls back to `AWS_REGION` or your
+profile, which in AWS CloudShell is whatever region the console was showing.
+
 ```sh
+REGION=us-east-1   # the region you deploy to
+
 curl -fsSLO https://github.com/dnxlabs/panorama/releases/latest/download/panorama.yaml
 
-aws cloudformation deploy \
+aws cloudformation deploy --region "$REGION" \
   --stack-name panorama \
   --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM \
@@ -106,10 +120,12 @@ fifteen minutes, nearly all of it Aurora.
 
 The stack prints the migration command with your cluster, subnets and security
 group already in it. It is the `MigrateCommand` output on the stack's
-**Outputs** tab, or:
+**Outputs** tab, or, with `REGION` set to the stack's region as in step 1:
 
 ```sh
-aws cloudformation describe-stacks --stack-name panorama \
+REGION=us-east-1   # the region the stack is in
+
+aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
   --query "Stacks[0].Outputs[?OutputKey=='MigrateCommand'].OutputValue" --output text
 ```
 
@@ -117,7 +133,7 @@ Run what it prints, in a terminal or in AWS CloudShell. When the task has
 stopped, check that it exited zero:
 
 ```sh
-aws ecs describe-tasks --cluster panorama --tasks <task-arn> \
+aws ecs describe-tasks --region "$REGION" --cluster panorama --tasks <task-arn> \
   --query "tasks[0].containers[0].exitCode"
 ```
 
@@ -125,7 +141,7 @@ Then start the service by setting `DesiredCount` to `2`. In the console:
 **Update**, **Use existing template**, and change `DesiredCount`. From the CLI:
 
 ```sh
-aws cloudformation deploy --stack-name panorama --template-file panorama.yaml \
+aws cloudformation deploy --region "$REGION" --stack-name panorama --template-file panorama.yaml \
   --capabilities CAPABILITY_IAM --parameter-overrides DesiredCount=2
 ```
 
@@ -138,13 +154,16 @@ If you did not set `HostedZoneId`, point your hostname at the
 ## 3. Connect single sign-on
 
 A new deployment has no accounts, so the first time in you use a one-time
-**setup code**. Mint one with a one-off task. Its network configuration is the
-same as in the `MigrateCommand` you ran:
+**setup code**. Mint one with a one-off task, on the same network as the
+service. The stack's `RunTaskNetwork` output is that network, subnets, security
+group and public IP setting included:
 
 ```sh
-aws ecs run-task --cluster panorama --task-definition panorama \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-aaa,subnet-bbb],securityGroups=[<ServiceSecurityGroupId>],assignPublicIp=DISABLED}" \
+NETWORK=$(aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
+  --query "Stacks[0].Outputs[?OutputKey=='RunTaskNetwork'].OutputValue" --output text)
+
+aws ecs run-task --region "$REGION" --cluster panorama --task-definition panorama \
+  --launch-type FARGATE --network-configuration "$NETWORK" \
   --overrides '{"containerOverrides":[{"name":"panorama","command":["admin","setup"]}]}'
 ```
 
@@ -160,10 +179,10 @@ sign-on and the model providers.
    in the secret the stack created for it:
 
    ```sh
-   SECRET=$(aws cloudformation describe-stacks --stack-name panorama \
+   SECRET=$(aws cloudformation describe-stacks --region "$REGION" --stack-name panorama \
      --query "Stacks[0].Outputs[?OutputKey=='OidcSecretArn'].OutputValue" --output text)
 
-   aws secretsmanager put-secret-value --secret-id "$SECRET" \
+   aws secretsmanager put-secret-value --region "$REGION" --secret-id "$SECRET" \
      --secret-string '<the value the console printed>'
    ```
 
@@ -171,7 +190,7 @@ sign-on and the model providers.
    starts:
 
    ```sh
-   aws ecs update-service --cluster panorama --service panorama --force-new-deployment
+   aws ecs update-service --region "$REGION" --cluster panorama --service panorama --force-new-deployment
    ```
 
 4. When the new tasks are up, press **End session**, then **Continue with
@@ -180,6 +199,12 @@ sign-on and the model providers.
 **The first person to sign in becomes an administrator.** Panorama does not
 own identities, so there is no local admin user to create. Sign in yourself
 first.
+
+**No identity provider to connect?** You can still follow the rest of this page
+by signing in with a gateway token instead: run the same one-off task with the
+command `["token","create","-email","you@example.com","-role","admin"]` in place
+of `["admin","setup"]`, and paste the token from its log on the sign-in screen.
+See [Evaluating without an identity provider](/docs/deploy/aws/#evaluating-without-an-identity-provider).
 
 You land on **Analytics**. The **setup** chip in the sidebar opens a checklist
 of what a new deployment needs. The next two steps are its required ones.
@@ -325,7 +350,7 @@ configured in your tool to produce them. See
 ## Clean up
 
 ```sh
-aws cloudformation delete-stack --stack-name panorama
+aws cloudformation delete-stack --region "$REGION" --stack-name panorama
 ```
 
 The database is kept as a final snapshot when the stack is deleted. Delete the

@@ -431,6 +431,12 @@ type Error struct {
 	StatusCode int
 	// Message is safe to show a client. Provider text is not relayed verbatim.
 	Message string
+	// Detail is the provider's own account of the failure - AWS's error code
+	// and message - for an administrator: the log, the provider check, and
+	// Settings, Model providers. Never sent to a client, because it names the
+	// account, its roles and its policies. Empty when the provider said
+	// nothing beyond the status.
+	Detail string
 	// Err is the underlying error, for logs only.
 	Err error
 }
@@ -472,4 +478,58 @@ func AsError(err error) (*Error, bool) {
 	var pe *Error
 	ok := errors.As(err, &pe)
 	return pe, ok
+}
+
+// Detail is the most specific account of a failure there is: the provider's
+// own words when it gave some, and the whole error otherwise - a transport
+// failure or a missing credential has no provider words, and its error text is
+// what names it.
+func Detail(err error) string {
+	if err == nil {
+		return ""
+	}
+	if pe, ok := AsError(err); ok && pe.Detail != "" {
+		return pe.Detail
+	}
+	return err.Error()
+}
+
+// Refusal reports whether a failure is the provider declining to serve a model
+// to this deployment - not found, or not permitted - as opposed to a request
+// it rejected or a moment it was busy. These are the failures only an
+// administrator can fix, and the only ones whose provider text is kept: none
+// of them quotes a request body.
+func Refusal(err error) bool {
+	pe, ok := AsError(err)
+	return ok && (pe.Kind == ErrKindNotFound || pe.Kind == ErrKindForbidden)
+}
+
+// ModelAccess is what a provider says about one model's availability to this
+// account, as evidence beside a refusal.
+//
+// Evidence and never a gate: on Bedrock the agreement reads NOT_AVAILABLE for
+// every model nobody has invoked yet - the first invocation is what subscribes
+// the account - and every field can read AVAILABLE for a model the account is
+// refused anyway. So it is shown next to the provider's refusal, which is the
+// answer, and nothing is decided from it.
+type ModelAccess struct {
+	// Model is the identifier the provider answered about, which for Bedrock
+	// is the foundation model behind an inference profile.
+	Model string
+	// Agreement is the Marketplace agreement's status, and AgreementError the
+	// provider's message when it has one.
+	Agreement      string
+	AgreementError string
+	Authorization  string
+	Entitlement    string
+	Region         string
+}
+
+// AccessReporter is the optional capability of reporting ModelAccess.
+//
+// Optional because it is genuinely not universal: bedrock-mantle publishes
+// nothing of the kind. A provider that cannot answer does not satisfy it,
+// rather than answering with blanks that read as statuses.
+type AccessReporter interface {
+	ModelAccess(ctx context.Context, model string) (ModelAccess, error)
 }

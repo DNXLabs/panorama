@@ -90,12 +90,16 @@ var TaskRolePolicy = PolicyDocument{
 			// Discovery and pricing, on both endpoints. Resource "*" because the
 			// list actions are not scoped to a resource, and writing a narrower
 			// one here would fail discovery in a way that reads as an empty
-			// account rather than a policy mistake.
+			// account rather than a policy mistake. GetFoundationModelAvailability
+			// is the provider check's evidence beside a refusal - what Bedrock
+			// says about the agreement, the authorization and the entitlement -
+			// and is read, never acted on.
 			Sid:    "DiscoverAndPriceModels",
 			Effect: "Allow",
 			Action: []string{
 				"bedrock:ListFoundationModels",
 				"bedrock:ListInferenceProfiles",
+				"bedrock:GetFoundationModelAvailability",
 				"bedrock-mantle:ListModels",
 				"bedrock-mantle:GetModel",
 				"pricing:GetProducts",

@@ -25,87 +25,67 @@ import (
 // there is nothing on disk to go stale, and a signed-out machine stops working
 // at the next refresh rather than whenever somebody notices.
 func configureCmd(ctx context.Context, args []string) error {
-	// The tool name is taken before the flags are parsed, and the flags may
-	// come on either side of it.
-	//
-	// Go's flag package stops at the first argument that is not a flag, so
-	// parsing first and reading the name out of fs.Args() afterwards silently
-	// ignores everything after the name. That is how `panorama configure
-	// claude-code -write` - the form this product's own setup screen tells
-	// people to run - came to print the configuration to stdout, write no file,
-	// and exit 0.
-	tool, rest := splitToolName(args)
-	if tool == "" {
-		return errors.New("which tool? panorama configure opencode, or panorama configure claude-code")
-	}
-
-	fs := flag.NewFlagSet("panorama configure "+tool, flag.ContinueOnError)
-	url := fs.String("url", "", "the deployment to configure for")
-	write := fs.Bool("write", false, "write the configuration file instead of printing it")
-	path := fs.String("path", "", "where to write it (default: the tool's usual location)")
-	if err := fs.Parse(rest); err != nil {
+	opts, err := parseConfigure(args)
+	if err != nil {
 		return err
-	}
-	if extra := fs.Args(); len(extra) > 0 {
-		return fmt.Errorf("panorama configure takes one tool; it was also given %q", strings.Join(extra, " "))
 	}
 
 	creds, err := loadCredentials()
 	if err != nil {
 		return err
 	}
-	base, dep, err := creds.resolve(*url)
+	base, dep, err := creds.resolve(opts.url)
 	if err != nil {
 		return err
 	}
 
-	switch tool {
+	switch opts.tool {
 	case "claude-code", "claude":
-		return configureClaudeCode(ctx, creds, base, dep, *write, *path)
+		return configureClaudeCode(ctx, creds, base, dep, opts.write, opts.path)
 	case "opencode":
-		return configureOpenCode(ctx, creds, base, dep, *write, *path)
+		return configureOpenCode(ctx, creds, base, dep, opts.write, opts.path)
 	default:
 		return fmt.Errorf("panorama does not generate configuration for %q yet; "+
-			"point the tool at %s and use `panorama token` for its credential", tool, base)
+			"point the tool at %s and use `panorama token` for its credential", opts.tool, base)
 	}
 }
 
-// splitToolName pulls the tool out of the argument list, wherever it sits.
+// configureOptions is what `panorama configure` was asked to do.
+type configureOptions struct {
+	tool  string
+	url   string
+	write bool
+	path  string
+}
+
+// parseConfigure reads the tool name and the flags, which may come on either
+// side of it.
 //
-// A name is anything that is not a flag and does not follow a flag that takes a
-// value, so both `configure claude-code -write` and `configure -write
-// claude-code` name the same tool. Accepting one and quietly misreading the
-// other is worse than refusing both.
-func splitToolName(args []string) (tool string, rest []string) {
-	rest = make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if strings.HasPrefix(arg, "-") {
-			rest = append(rest, arg)
-			// -url and -path take a value, which is not the tool name.
-			// -write is boolean and takes none. An "=" form carries its own.
-			if !strings.Contains(arg, "=") && takesValue(arg) && i+1 < len(args) {
-				i++
-				rest = append(rest, args[i])
-			}
-			continue
-		}
-		if tool == "" {
-			tool = arg
-			continue
-		}
-		rest = append(rest, arg)
-	}
-	return tool, rest
-}
+// Go's flag package stops at the first argument that is not a flag, so parsing
+// first and reading the name out of fs.Args() afterwards silently ignores
+// everything after the name. That is how `panorama configure claude-code
+// -write` - the form this product's own setup screen tells people to run - came
+// to print the configuration to stdout, write no file, and exit 0.
+func parseConfigure(args []string) (configureOptions, error) {
+	var opts configureOptions
+	fs := flag.NewFlagSet("panorama configure", flag.ContinueOnError)
+	fs.StringVar(&opts.url, "url", "", "the deployment to configure for")
+	fs.BoolVar(&opts.write, "write", false, "write the configuration file instead of printing it")
+	fs.StringVar(&opts.path, "path", "", "where to write it (default: the tool's usual location)")
 
-// takesValue reports whether a configure flag is followed by its value.
-func takesValue(arg string) bool {
-	switch strings.TrimLeft(arg, "-") {
-	case "url", "path":
-		return true
+	positional, err := parseArgs(fs, args)
+	if err != nil {
+		return configureOptions{}, err
+	}
+	switch len(positional) {
+	case 0:
+		return configureOptions{}, errors.New("which tool? panorama configure opencode, or panorama configure claude-code")
+	case 1:
+		opts.tool = positional[0]
+		return opts, nil
 	default:
-		return false
+		return configureOptions{}, fmt.Errorf("panorama configure takes one tool; it was also given %q",
+			strings.Join(positional[1:], " "))
 	}
 }
 
