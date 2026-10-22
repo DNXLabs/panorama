@@ -698,25 +698,31 @@ jobs:
           # a status code in the log: buildx's imagetools reported a tag that
           # served the right digest to everybody else as missing, and said
           # nothing about why. Anonymous requests to ECR Public are rate
-          # limited per address, so a 429 or a 5xx is asked again.
+          # limited per address, so a 429, a 5xx or no answer at all (000) is
+          # asked again, the token request included.
           digest_of() {
-            local repo=${1%:*} tag=${1##*:} token headers status
+            local repo=${1%:*} tag=${1##*:} asked reply status
             repo=${repo#public.ecr.aws/}
             for attempt in 1 2 3 4 5; do
-              token=$(curl -sS "https://public.ecr.aws/token/?scope=repository:$repo:pull" | jq -r .token)
-              headers=$(curl -sS -I -o - -w '%{http_code}' \
-                -H "Authorization: Bearer $token" \
-                -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
-                "https://public.ecr.aws/v2/$repo/manifests/$tag")
-              status=${headers##*$'\n'}
+              asked="the token for $1"
+              reply=$(curl -sS -w '\n%{http_code}' "https://public.ecr.aws/token/?scope=repository:$repo:pull")
+              status=${reply##*$'\n'}
+              if [ "$status" = 200 ]; then
+                asked=$1
+                reply=$(curl -sS -I -o - -w '%{http_code}' \
+                  -H "Authorization: Bearer $(printf '%s' "${reply%$'\n'*}" | jq -r .token)" \
+                  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+                  "https://public.ecr.aws/v2/$repo/manifests/$tag")
+                status=${reply##*$'\n'}
+              fi
               case "$status" in
-                200) printf '%s\n' "$headers" | tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" { print $2 }'; return ;;
+                200) printf '%s\n' "$reply" | tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" { print $2 }'; return ;;
                 404) return ;;
-                429|5??) echo "::warning::$1 answered $status, attempt $attempt" >&2; sleep $((attempt * 5)) ;;
-                *) echo "::error::$1 answered $status" >&2; return ;;
+                000|429|5??) echo "::warning::$asked answered $status, attempt $attempt" >&2; sleep $((attempt * 5)) ;;
+                *) echo "::error::$asked answered $status" >&2; return ;;
               esac
             done
-            echo "::error::$1 answered $status five times" >&2
+            echo "::error::$asked answered $status five times" >&2
           }
           # fetch URL FILE - the body, or a failure naming the status.
           fetch() {
