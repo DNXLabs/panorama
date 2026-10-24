@@ -61,6 +61,11 @@ convenient it is.
   `SPDX-License-Identifier: AGPL-3.0-only`) in its own comment syntax; a file that
   cannot hold a comment gets a path in `REUSE.toml`. The manual's prose and images are
   CC-BY-4.0. `make license-check` (`reuse lint`) fails on a file with neither.
+- **A released migration is never edited, renumbered or withdrawn.** A change to the
+  schema is a new migration, in both `internal/store/migrations` directories at once.
+  goose records that a version was applied, not which file applied it, so a database
+  that ran a withdrawn migration skips whatever later file reuses its number, and
+  `migrate status` calls that schema current with the tables simply absent.
 
 ## Architecture
 

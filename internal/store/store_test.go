@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/dnxlabs/panorama/internal/config"
@@ -160,6 +158,58 @@ func TestOpenPostgres(t *testing.T) {
 	}
 }
 
+// TestReplicasMigrateTogether is a service's tasks starting at once against a
+// database with a migration pending. Without the migration lock one of them
+// applies a migration the other is already applying and exits on a duplicate
+// key in the catalogue, which is how two Fargate tasks met their first start.
+func TestReplicasMigrateTogether(t *testing.T) {
+	first := openPostgres(t)
+
+	// The version table has to exist already, as it does on any deployment
+	// that has started once. On an empty database goose's own retry while
+	// creating that table staggers the replicas by a second, which hides the
+	// race this test is for.
+	if _, err := first.PendingMigrations(t.Context()); err != nil {
+		t.Fatalf("PendingMigrations: %v", err)
+	}
+
+	const replicas = 4
+	dbs := []*DB{first}
+	for range replicas - 1 {
+		db, err := Open(t.Context(), config.Database{
+			Driver:       config.DriverPostgres,
+			DSN:          os.Getenv(testDBEnv),
+			MaxOpenConns: 5,
+		})
+		if err != nil {
+			t.Fatalf("Open postgres: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := db.Close(); err != nil {
+				t.Errorf("close: %v", err)
+			}
+		})
+		dbs = append(dbs, db)
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, replicas)
+	for _, db := range dbs {
+		go func() {
+			<-start
+			errs <- db.Migrate(t.Context())
+		}()
+	}
+	close(start)
+	for range replicas {
+		if err := <-errs; err != nil {
+			t.Errorf("a replica failed to migrate: %v", err)
+		}
+	}
+
+	assertSchema(t, first)
+}
+
 // eachDialect runs a test body against both supported databases.
 //
 // It exists because the queries that differ between them are exactly the ones
@@ -194,7 +244,7 @@ func assertSchema(t *testing.T, db *DB) {
 		"work_item_links", "integrations",
 		"console_sessions", "oidc_flows", "oidc_group_roles",
 		"provider_models", "model_routes", "providers",
-		"cli_authorizations", "cli_grants", "service_tokens", "web_search",
+		"cli_authorizations", "cli_grants", "service_tokens", "web_search", "provider_failures",
 	} {
 		var n int
 		// The table names come from this test's own literal list.
@@ -204,49 +254,6 @@ func assertSchema(t *testing.T, db *DB) {
 		}
 		if n != 0 {
 			t.Errorf("table %s has %d rows on a fresh database, want 0", table, n)
-		}
-	}
-}
-
-// spentVersions are migration numbers that were issued and then withdrawn.
-//
-// goose records that version 12 was applied; it does not record which file did
-// it. So a database that ran the deployment while a since-deleted migration
-// existed will skip any later migration reusing that number - silently, with
-// `migrate status` reporting the new file as applied and the tables it should
-// have created simply absent. The first symptom is a query failing against a
-// schema the tool calls current.
-//
-// A version number is append-only. Withdrawing a migration does not return its
-// number to the pool, so this list only ever grows. It is empty because the
-// chain was squashed into 00001_initial.sql and every database that predates
-// the squash has its record rewritten by scripts/rebaseline, which leaves no
-// number behind it spent.
-var spentVersions = map[int]string{}
-
-// TestNoMigrationReusesAWithdrawnVersion.
-//
-// The failure this prevents cost a crash-looping local deployment to find, and
-// nothing else would have caught it: a fresh database has no spent numbers, so
-// every other migration test passes.
-func TestNoMigrationReusesAWithdrawnVersion(t *testing.T) {
-	for _, driver := range []string{config.DriverSQLite, config.DriverPostgres} {
-		for _, name := range migrationFilenames(t, driver) {
-			digits, _, ok := strings.Cut(name, "_")
-			if !ok {
-				t.Errorf("%s/%s is not named <version>_<description>.sql", driver, name)
-				continue
-			}
-			version, err := strconv.Atoi(digits)
-			if err != nil {
-				t.Errorf("%s/%s has no version number: %v", driver, name, err)
-				continue
-			}
-			if withdrawn, spent := spentVersions[version]; spent {
-				t.Errorf("%s/%s reuses version %d, which was spent by %s - "+
-					"every database that applied it will skip this migration; renumber it",
-					driver, name, version, withdrawn)
-			}
 		}
 	}
 }
