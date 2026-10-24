@@ -10,6 +10,7 @@ import (
 	"io/fs"
 
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 
 	"github.com/dnxlabs/panorama/internal/config"
 )
@@ -42,7 +43,7 @@ func migrationDir(driver string) string {
 
 // provider builds a goose provider bound to this handle's dialect and
 // migration set.
-func (db *DB) provider() (*goose.Provider, error) {
+func (db *DB) provider(opts ...goose.ProviderOption) (*goose.Provider, error) {
 	dialect, err := gooseDialect(db.driver)
 	if err != nil {
 		return nil, err
@@ -53,7 +54,7 @@ func (db *DB) provider() (*goose.Provider, error) {
 		return nil, fmt.Errorf("store: locate %s migrations: %w", db.driver, err)
 	}
 
-	p, err := goose.NewProvider(goose.Dialect(dialect), db.DB, sub)
+	p, err := goose.NewProvider(goose.Dialect(dialect), db.DB, sub, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("store: build %s migration provider: %w", db.driver, err)
 	}
@@ -62,8 +63,28 @@ func (db *DB) provider() (*goose.Provider, error) {
 
 // Migrate applies every pending migration. It is safe to call on a database
 // that is already current, in which case it does nothing.
+//
+// On Postgres it holds a session advisory lock while it does, because every
+// task of a service starts at once: without the lock two replicas apply the
+// same migration side by side and one dies on a duplicate key in the catalogue.
+// The one that waits finds the schema current. Only Migrate locks: status is
+// read by /readyz, which must answer "not yet" rather than queue behind a
+// migration. SQLite has one process and one connection, so nothing to race.
+//
+// The lock is asked for every second for up to five minutes: goose's own
+// ceiling, polled more often than its five-second default, so a replica
+// waiting behind a short migration starts a second late rather than five.
 func (db *DB) Migrate(ctx context.Context) error {
-	p, err := db.provider()
+	var opts []goose.ProviderOption
+	if db.driver == config.DriverPostgres {
+		locker, err := lock.NewPostgresSessionLocker(lock.WithLockTimeout(1, 300))
+		if err != nil {
+			return fmt.Errorf("store: build the migration lock: %w", err)
+		}
+		opts = append(opts, goose.WithSessionLocker(locker))
+	}
+
+	p, err := db.provider(opts...)
 	if err != nil {
 		return err
 	}

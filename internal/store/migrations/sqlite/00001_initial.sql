@@ -1049,6 +1049,35 @@ CREATE TABLE providers (
     configured_by TEXT NOT NULL DEFAULT ''
 );
 
+-- The latest request each provider refused to serve, in the provider's own
+-- words, for Settings, Model providers.
+--
+-- Bedrock's reason for refusing a model - Anthropic's use case form not
+-- submitted, a model AWS does not offer this account, an SCP - is something an
+-- engineer cannot act on and must not be shown, since it names the account and
+-- its roles. Without this row it reached the log and nowhere else, so the
+-- administrator who could fix it saw only a generic 502 relayed by somebody
+-- else. Only refusals (not found, not permitted) are kept: their text is
+-- AWS's, and never quotes a request body.
+--
+-- One row per provider, replaced by the next refusal: it answers "why is
+-- this failing now", and the audit trail already counts how often.
+-- Deliberately not a column of providers, whose writes reload the policy
+-- snapshot; a refused request is not a configuration change.
+CREATE TABLE provider_failures (
+    kind TEXT PRIMARY KEY CHECK (kind IN ('bedrock', 'bedrock-mantle')),
+    -- Where and on what: a refusal is a statement about one model in one
+    -- region, and the region may have changed since.
+    region TEXT NOT NULL,
+    model TEXT NOT NULL,
+    -- The coarse class the data plane recorded: not_found or forbidden.
+    error_kind TEXT NOT NULL,
+    -- AWS's error code and message, truncated.
+    message TEXT NOT NULL,
+    request_id TEXT NOT NULL DEFAULT '',
+    failed_at TIMESTAMP NOT NULL
+);
+
 -- Rates per model, seeded from the compiled-in table and refreshed from the
 -- AWS Price List API.
 CREATE TABLE price_table (
@@ -1124,10 +1153,114 @@ CREATE TABLE web_search (
     configured_by TEXT NOT NULL DEFAULT ''
 );
 
+-- A counter every write to the policy's tables moves, so a running gateway can
+-- tell that a route was saved by another process - `panorama policy apply` in a
+-- one-off task, or the console on another replica - by reading one row a
+-- second, rather than learning it at the next full reload half a minute later.
+--
+-- Moved by triggers rather than by the code that writes, because there are a
+-- dozen write paths and the one that forgot would be the one whose change
+-- appears to have done nothing. The tables are exactly the ones
+-- store.LoadPolicy reads: model_routes, budgets, team_members, providers and
+-- cost_centers. Nothing written on the request path is among them; a table
+-- added to the snapshot needs its triggers in a new migration.
+--
+-- SQLite triggers fire once per row, so one statement touching three routes
+-- moves the counter by three. Only a change matters, not its size.
+CREATE TABLE policy_generation (
+    -- One row, ever.
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    generation INTEGER NOT NULL
+);
+
+INSERT INTO policy_generation (id, generation) VALUES (1, 0);
+
+-- +goose StatementBegin
+CREATE TRIGGER model_routes_insert_moves_policy AFTER INSERT ON model_routes
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER model_routes_update_moves_policy AFTER UPDATE ON model_routes
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER model_routes_delete_moves_policy AFTER DELETE ON model_routes
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER budgets_insert_moves_policy AFTER INSERT ON budgets
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER budgets_update_moves_policy AFTER UPDATE ON budgets
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER budgets_delete_moves_policy AFTER DELETE ON budgets
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER team_members_insert_moves_policy AFTER INSERT ON team_members
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER team_members_update_moves_policy AFTER UPDATE ON team_members
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER team_members_delete_moves_policy AFTER DELETE ON team_members
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER providers_insert_moves_policy AFTER INSERT ON providers
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER providers_update_moves_policy AFTER UPDATE ON providers
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER providers_delete_moves_policy AFTER DELETE ON providers
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER cost_centers_insert_moves_policy AFTER INSERT ON cost_centers
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER cost_centers_update_moves_policy AFTER UPDATE ON cost_centers
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER cost_centers_delete_moves_policy AFTER DELETE ON cost_centers
+BEGIN UPDATE policy_generation SET generation = generation + 1; END;
+-- +goose StatementEnd
+
 -- +goose Down
 
+DROP TRIGGER cost_centers_delete_moves_policy;
+DROP TRIGGER cost_centers_update_moves_policy;
+DROP TRIGGER cost_centers_insert_moves_policy;
+DROP TRIGGER providers_delete_moves_policy;
+DROP TRIGGER providers_update_moves_policy;
+DROP TRIGGER providers_insert_moves_policy;
+DROP TRIGGER team_members_delete_moves_policy;
+DROP TRIGGER team_members_update_moves_policy;
+DROP TRIGGER team_members_insert_moves_policy;
+DROP TRIGGER budgets_delete_moves_policy;
+DROP TRIGGER budgets_update_moves_policy;
+DROP TRIGGER budgets_insert_moves_policy;
+DROP TRIGGER model_routes_delete_moves_policy;
+DROP TRIGGER model_routes_update_moves_policy;
+DROP TRIGGER model_routes_insert_moves_policy;
+DROP TABLE policy_generation;
 DROP TABLE web_search;
 DROP TABLE price_table;
+DROP TABLE provider_failures;
 DROP TABLE providers;
 DROP TABLE provider_models;
 DROP TABLE cli_authorizations;

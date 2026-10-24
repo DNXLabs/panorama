@@ -1049,6 +1049,35 @@ CREATE TABLE providers (
     configured_by TEXT NOT NULL DEFAULT ''
 );
 
+-- The latest request each provider refused to serve, in the provider's own
+-- words, for Settings, Model providers.
+--
+-- Bedrock's reason for refusing a model - Anthropic's use case form not
+-- submitted, a model AWS does not offer this account, an SCP - is something an
+-- engineer cannot act on and must not be shown, since it names the account and
+-- its roles. Without this row it reached the log and nowhere else, so the
+-- administrator who could fix it saw only a generic 502 relayed by somebody
+-- else. Only refusals (not found, not permitted) are kept: their text is
+-- AWS's, and never quotes a request body.
+--
+-- One row per provider, replaced by the next refusal: it answers "why is
+-- this failing now", and the audit trail already counts how often.
+-- Deliberately not a column of providers, whose writes reload the policy
+-- snapshot; a refused request is not a configuration change.
+CREATE TABLE provider_failures (
+    kind TEXT PRIMARY KEY CHECK (kind IN ('bedrock', 'bedrock-mantle')),
+    -- Where and on what: a refusal is a statement about one model in one
+    -- region, and the region may have changed since.
+    region TEXT NOT NULL,
+    model TEXT NOT NULL,
+    -- The coarse class the data plane recorded: not_found or forbidden.
+    error_kind TEXT NOT NULL,
+    -- AWS's error code and message, truncated.
+    message TEXT NOT NULL,
+    request_id TEXT NOT NULL DEFAULT '',
+    failed_at TIMESTAMPTZ NOT NULL
+);
+
 -- Rates per model, seeded from the compiled-in table and refreshed from the
 -- AWS Price List API.
 CREATE TABLE price_table (
@@ -1125,10 +1154,62 @@ CREATE TABLE web_search (
     configured_by TEXT NOT NULL DEFAULT ''
 );
 
+-- A counter every write to the policy's tables moves, so a running gateway can
+-- tell that a route was saved by another process - `panorama policy apply` in a
+-- one-off task, or the console on another replica - by reading one row a
+-- second, rather than learning it at the next full reload half a minute later.
+--
+-- Moved by triggers rather than by the code that writes, because there are a
+-- dozen write paths and the one that forgot would be the one whose change
+-- appears to have done nothing. The tables are exactly the ones
+-- store.LoadPolicy reads: model_routes, budgets, team_members, providers and
+-- cost_centers. Nothing written on the request path is among them; a table
+-- added to the snapshot needs its triggers in a new migration.
+--
+-- Statement-level, so one statement touching three routes moves the counter
+-- once. The row lock the update takes serialises policy writes against each
+-- other until they commit, which is a cost paid by a screen somebody saves,
+-- never by a request.
+CREATE TABLE policy_generation (
+    -- One row, ever.
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    generation BIGINT NOT NULL
+);
+
+INSERT INTO policy_generation (id, generation) VALUES (1, 0);
+
+-- +goose StatementBegin
+CREATE FUNCTION move_policy_generation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE policy_generation SET generation = generation + 1;
+    RETURN NULL;
+END;
+$$;
+-- +goose StatementEnd
+
+CREATE TRIGGER model_routes_moves_policy AFTER INSERT OR UPDATE OR DELETE ON model_routes
+    FOR EACH STATEMENT EXECUTE FUNCTION move_policy_generation();
+CREATE TRIGGER budgets_moves_policy AFTER INSERT OR UPDATE OR DELETE ON budgets
+    FOR EACH STATEMENT EXECUTE FUNCTION move_policy_generation();
+CREATE TRIGGER team_members_moves_policy AFTER INSERT OR UPDATE OR DELETE ON team_members
+    FOR EACH STATEMENT EXECUTE FUNCTION move_policy_generation();
+CREATE TRIGGER providers_moves_policy AFTER INSERT OR UPDATE OR DELETE ON providers
+    FOR EACH STATEMENT EXECUTE FUNCTION move_policy_generation();
+CREATE TRIGGER cost_centers_moves_policy AFTER INSERT OR UPDATE OR DELETE ON cost_centers
+    FOR EACH STATEMENT EXECUTE FUNCTION move_policy_generation();
+
 -- +goose Down
 
+DROP TRIGGER cost_centers_moves_policy ON cost_centers;
+DROP TRIGGER providers_moves_policy ON providers;
+DROP TRIGGER team_members_moves_policy ON team_members;
+DROP TRIGGER budgets_moves_policy ON budgets;
+DROP TRIGGER model_routes_moves_policy ON model_routes;
+DROP FUNCTION move_policy_generation();
+DROP TABLE policy_generation;
 DROP TABLE web_search;
 DROP TABLE price_table;
+DROP TABLE provider_failures;
 DROP TABLE providers;
 DROP TABLE provider_models;
 DROP TABLE cli_authorizations;
